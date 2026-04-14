@@ -11,22 +11,15 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
 
-        if (!isPrimaryAdminEmail(email)) {
-            return NextResponse.json(
-                {
-                    error:
-                        "Registration is disabled. This application uses a single authorized account (Supabase Auth).",
-                },
-                { status: 403 },
-            );
-        }
+        // No restricted registration - open to all users
+
 
         const supabase = await createClient();
 
         // 1. Sign up user in Supabase Auth (only primary email allowed above)
         const isSuperAdmin = isPrimaryAdminEmail(email);
         const role = isSuperAdmin ? "ADMIN" : "USER";
-        const status = isSuperAdmin ? "APPROVED" : "PENDING";
+        const status = "APPROVED"; // Everyone is pre-authorized
 
         let supabaseUserId;
 

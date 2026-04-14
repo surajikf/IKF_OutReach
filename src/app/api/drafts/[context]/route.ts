@@ -38,14 +38,14 @@ async function ensurePrismaUserFromSupabaseUser(user: any) {
         ...(email ? { email } : {}),
         ...(name ? { name } : {}),
         role: role === "ADMIN" ? "ADMIN" : "USER",
-        status: status === "BANNED" ? "BANNED" : status === "PENDING" ? "PENDING" : "APPROVED",
+        status: status === "BANNED" ? "BANNED" : "APPROVED",
       },
       create: {
         id: user.id,
         email: email || `unknown+${user.id}@local`,
         name: name || null,
         role: role === "ADMIN" ? "ADMIN" : "USER",
-        status: status === "BANNED" ? "BANNED" : status === "PENDING" ? "PENDING" : "APPROVED",
+        status: status === "BANNED" ? "BANNED" : "APPROVED",
       },
     });
   } catch (err: any) {
@@ -56,14 +56,14 @@ async function ensurePrismaUserFromSupabaseUser(user: any) {
         update: {
           ...(name ? { name } : {}),
           role: role === "ADMIN" ? "ADMIN" : "USER",
-          status: status === "BANNED" ? "BANNED" : status === "PENDING" ? "PENDING" : "APPROVED",
+          status: status === "BANNED" ? "BANNED" : "APPROVED",
         },
         create: {
           id: user.id,
           email: `unknown+${user.id}@local`,
           name: name || null,
           role: role === "ADMIN" ? "ADMIN" : "USER",
-          status: status === "BANNED" ? "BANNED" : status === "PENDING" ? "PENDING" : "APPROVED",
+          status: status === "BANNED" ? "BANNED" : "APPROVED",
         },
       });
       return;

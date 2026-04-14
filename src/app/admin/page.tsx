@@ -79,7 +79,7 @@ export default function AdminDashboard() {
                     <span className="text-[10px] font-bold uppercase tracking-widest">Level-5 Clearance Zone</span>
                 </div>
                 <h2 className="text-3xl font-bold tracking-tight text-slate-900">Access Management</h2>
-                <p className="text-slate-500 font-medium text-sm mt-1">Approve or revoke access to the Neural Matrix.</p>
+                <p className="text-slate-500 font-medium text-sm mt-1">Manage personnel and access directives for the Neural Matrix.</p>
             </header>
 
             <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
@@ -148,7 +148,7 @@ export default function AdminDashboard() {
                                     <div className="flex items-center justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
                                         {userItem.id !== user?.id && (
                                             <>
-                                                {userItem.status !== "APPROVED" && (
+                                                {false && userItem.status !== "APPROVED" && (
                                                     <button onClick={() => handleAction(userItem.id, "APPROVE")} className="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors tooltip-trigger" title="Approve Access">
                                                         <ShieldCheck className="w-4 h-4" />
                                                     </button>

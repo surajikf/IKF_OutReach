@@ -51,10 +51,8 @@ export async function middleware(request: NextRequest) {
 
     if (isAuthRoute) {
         if (user) {
-            if (status === 'PENDING') {
-                return NextResponse.redirect(new URL(withBasePath('/pending'), request.url));
-            }
             return NextResponse.redirect(new URL(withBasePath('/'), request.url));
+
         }
         return response;
     }
@@ -67,16 +65,15 @@ export async function middleware(request: NextRequest) {
     // Check Approval Status
     const isUpdatePasswordRoute = pathname === '/update-password';
 
-    if (status === 'PENDING' && pathname !== '/pending' && !isUpdatePasswordRoute) {
-        return NextResponse.redirect(new URL(withBasePath('/pending'), request.url));
-    }
+    // Removed PENDING status check
+
 
     if (status === 'BANNED' && pathname !== '/banned' && !isUpdatePasswordRoute) {
         return NextResponse.redirect(new URL(withBasePath('/banned'), request.url));
     }
 
-    // If approved, prevent access to pending/banned
-    if (status === 'APPROVED' && (pathname === '/pending' || pathname === '/banned')) {
+    // If approved, prevent access to banned
+    if (status === 'APPROVED' && pathname === '/banned') {
         return NextResponse.redirect(new URL(withBasePath('/'), request.url));
     }
 

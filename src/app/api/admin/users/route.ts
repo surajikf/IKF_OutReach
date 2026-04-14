@@ -11,8 +11,8 @@ function mapRole(v: unknown): UserRole {
 }
 
 function mapStatus(v: unknown): UserStatus {
-    if (v === "BANNED" || v === "PENDING" || v === "APPROVED") return v;
-    return "PENDING";
+    if (v === "BANNED" || v === "APPROVED") return v;
+    return "APPROVED";
 }
 
 function authUserToRow(u: SupabaseAuthUser) {
