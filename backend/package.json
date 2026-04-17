@@ -1,0 +1,49 @@
+{
+  "name": "@ikf/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "prisma generate && next build",
+    "start": "node ./start-standalone.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --config vitest.config.mts",
+    "test:watch": "vitest --config vitest.config.mts",
+    "worker": "tsx -r tsconfig-paths/register scripts/job-worker.ts",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "seed": "tsx prisma/seed.ts",
+    "seed:clients": "tsx prisma/seed-clients.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.2",
+    "@supabase/ssr": "^0.9.0",
+    "@supabase/supabase-js": "^2.99.2",
+    "axios": "^1.13.6",
+    "bcryptjs": "^3.0.3",
+    "date-fns": "^4.1.0",
+    "fast-xml-parser": "^5.4.2",
+    "groq-sdk": "^0.37.0",
+    "lucide-react": "^1.8.0",
+    "next": "16.1.6",
+    "next-auth": "^4.24.14",
+    "nodemailer": "7.0.13",
+    "openai": "^6.25.0",
+    "prisma": "^6.19.2",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/nodemailer": "^7.0.11",
+    "@types/react": "19.2.14",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5",
+    "vitest": "^2.1.8"
+  }
+}

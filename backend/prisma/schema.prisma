@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Client {
+  id                  String            @id @default(cuid())
+  clientName          String
+  contactPerson       String?
+  email               String            @unique
+  industry            String
+  relationshipLevel   String
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  externalId          String?
+  source              ClientSource      @default(MANUAL)
+  zohoTags            String[]          @default([])
+  gmailSourceAccount  String?
+  lastContacted       DateTime?
+  isRoleBased         Boolean           @default(false)
+  address             String?
+  clientSize          String?
+  gstin               String?
+  lastInvoiceDate     DateTime?
+  mobile              String?
+  phone               String?
+  poc                 String?
+  primaryEmail        String?
+  clientAddedOn       DateTime?
+  invoiceServiceNames String?
+  isBlocked           Boolean           @default(false)
+  campaigns           CampaignHistory[]
+  services            Service[]         @relation("ClientServices")
+  metadata            Json?             @default("{}")
+
+  @@unique([source, externalId])
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  serviceName String   @unique
+  category    String?
+  description String?
+  clients     Client[] @relation("ClientServices")
+}
+
+model CampaignHistory {
+  id              String   @id @default(cuid())
+  campaignType    String
+  campaignTopic   String
+  generatedOutput String
+  clientId        String?
+  dateCreated     DateTime @default(now())
+  client          Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum JobType {
+  CAMPAIGN_GENERATE
+  CAMPAIGN_DISPATCH_BATCH
+  GMAIL_IMPORT
+}
+
+model Job {
+  id           String    @id @default(cuid())
+  type         JobType
+  status       JobStatus @default(QUEUED)
+  progress     Int       @default(0)
+  payload      Json
+  result       Json?
+  error        String?
+  attempts     Int       @default(0)
+  lockedAt     DateTime?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([status, lockedAt])
+  @@index([type, createdAt])
+}
+
+model EmailDraft {
+  id        String   @id @default(cuid())
+  userId    String
+  context   String
+  subject   String   @default("")
+  bodyHtml  String   @default("")
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, context])
+  @@index([userId, updatedAt])
+}
+
+model GlobalSettings {
+  id                          String   @id @default("singleton")
+  aiProvider                  String   @default("Groq")
+  aiModel                     String   @default("llama-3.3-70b-versatile")
+  groqApiKeyEncrypted         String?
+  openaiApiKeyEncrypted       String?
+  googleClientIdEncrypted     String?
+  googleClientSecretEncrypted String?
+  googleRefreshTokenEncrypted String?
+  googleEmailEncrypted        String?
+  updatedAt                   DateTime @updatedAt
+  invoiceApiKeyEncrypted      String?
+  invoiceApiUrlEncrypted      String?
+  zohoClientIdEncrypted       String?
+  zohoClientSecretEncrypted   String?
+  zohoPipelineName            String?
+  zohoRefreshTokenEncrypted   String?
+  zohoStageName               String?
+  zohoFieldMapping            Json?    @default("[]")
+  zohoSyncAllToMetadata       Boolean  @default(false)
+  zohoExcludedFields          Json?    @default("[]")
+  zohoStages                  String[] @default([])
+  zohoGrantedScopes           String?
+  projectName                 String   @default("IKF Outreach")
+  projectLogo                 String?
+  emailProvider               String   @default("GMAIL")
+
+  // Generic SMTP Configuration
+  smtpHost                    String?
+  smtpPort                    Int?     @default(587)
+  smtpUser                    String?
+  smtpPassEncrypted           String?
+  smtpSecure                  Boolean  @default(false)
+  smtpSenderEmail             String?
+  smtpSenderName              String?
+
+  // Legacy Brevo (to be removed)
+  brevoApiKeyEncrypted        String?
+  brevoSenderEmail            String?
+  brevoSenderName             String?
+  brevoReplyTo                String?
+
+  // High-Availability Controls
+  autoFailover                Boolean  @default(true)
+}
+
+model User {
+  id           String     @id
+  name         String?
+  email        String     @unique
+  role         UserRole   @default(USER)
+  status       UserStatus @default(APPROVED)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  drafts EmailDraft[]
+}
+
+model GmailAccount {
+  id                    String    @id @default(cuid())
+  accountName           String
+  email                 String    @unique
+  refreshTokenEncrypted String
+  accessTokenEncrypted  String?
+  expiresAt             DateTime?
+  isDefault             Boolean   @default(false)
+  scopeGranted          Boolean   @default(false)
+  
+  // Diagnostic Fields
+  lastUsed              DateTime?
+  lastStatus            String?   @default("IDLE")
+  
+  updatedAt             DateTime  @updatedAt
+}
+
+enum ClientSource {
+  MANUAL
+  INVOICE_SYSTEM
+  ZOHO_BIGIN
+  GMAIL
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum UserStatus {
+  PENDING
+  APPROVED
+  BANNED
+}
