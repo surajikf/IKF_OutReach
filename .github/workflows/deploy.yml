@@ -1,0 +1,32 @@
+name: Deploy Outreach
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    defaults:
+      run:
+        working-directory: /var/www/apps/outreach
+
+    steps:
+      - name: Pull latest code
+        run: git pull origin main
+
+      - name: Install dependencies
+        run: npm ci --omit=dev
+
+      - name: Prisma setup
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy || true
+
+      - name: Build app
+        run: npm run build
+
+      - name: Reload PM2
+        run: sudo pm2 reload outreach
