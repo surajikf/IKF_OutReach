@@ -3,7 +3,7 @@ name: Deploy Outreach
 on:
   push:
     branches:
-      - main
+      - Main
 
 jobs:
   deploy:
