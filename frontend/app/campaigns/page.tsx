@@ -84,6 +84,75 @@ const recommendedObjectiveBySource: Record<AudienceSource, string> = {
     GMAIL: "Broadcast",
 };
 
+const smartContentGuide: Record<AudienceSource, Record<string, { subject: string; body: string; tip: string }>> = {
+    INVOICE_SYSTEM: {
+        Broadcast: {
+            subject: "Service update for {{companyName}}",
+            body: "Share one short update with value and a clear next step.",
+            tip: "Use service history to make the message specific.",
+        },
+        Targeted: {
+            subject: "Next step for {{companyName}}",
+            body: "Write a focused message based on current service usage.",
+            tip: "Mention one concrete problem and one direct solution.",
+        },
+        "Cross-Sell": {
+            subject: "Suggested add-on service for {{companyName}}",
+            body: "Recommend related services based on existing services.",
+            tip: "Keep it consultative, not sales-heavy.",
+        },
+        Reactivation: {
+            subject: "Can we reconnect, {{companyName}}?",
+            body: "Reconnect with a warm, respectful check-in and clear value.",
+            tip: "Reference past work briefly and suggest one next action.",
+        },
+    },
+    ZOHO_BIGIN: {
+        Broadcast: {
+            subject: "Quick business update for {{companyName}}",
+            body: "Send a broad CRM-friendly update.",
+            tip: "Keep it short and clear for mixed-stage contacts.",
+        },
+        Targeted: {
+            subject: "Proposal update for {{companyName}}",
+            body: "Write a stage-aware message tied to current CRM context.",
+            tip: "Add one reason to reply now.",
+        },
+        "Cross-Sell": {
+            subject: "Useful support for {{companyName}}",
+            body: "Suggest complementary services without invoice-level detail.",
+            tip: "Use simple benefit language.",
+        },
+        Reactivation: {
+            subject: "Checking in with {{companyName}}",
+            body: "Re-open conversation with helpful context.",
+            tip: "Keep tone friendly and low pressure.",
+        },
+    },
+    GMAIL: {
+        Broadcast: {
+            subject: "Quick note for {{companyName}}",
+            body: "Share a clear update with a single call to action.",
+            tip: "Avoid long blocks; 3-5 short paragraphs works best.",
+        },
+        Targeted: {
+            subject: "A focused idea for {{companyName}}",
+            body: "Write one personalized message based on contact context.",
+            tip: "Use a practical, conversational tone.",
+        },
+        "Cross-Sell": {
+            subject: "Support options for {{companyName}}",
+            body: "Suggest relevant options from known contact intent.",
+            tip: "Keep offers limited to 1-2 items.",
+        },
+        Reactivation: {
+            subject: "Reconnecting with {{companyName}}",
+            body: "Start with a short reconnection note.",
+            tip: "Ask an easy yes/no follow-up question.",
+        },
+    },
+};
+
 // Resonance tuning removed; tone is now inferred from the master draft.
 
 export default function CampaignGenerator() {
@@ -881,6 +950,10 @@ export default function CampaignGenerator() {
     }
 
     const sourceLabel = audienceSourceOptions.find((s) => s.id === audienceSource)?.name || null;
+    const activeGuide =
+        audienceSource && selectedType
+            ? smartContentGuide[audienceSource]?.[selectedType]
+            : null;
     const isReady = !!(audienceSource && selectedType && topic.trim() && coreMessage.trim() && cta.trim());
     const readinessChecks = [
         { label: "Audience source", done: !!audienceSource },
@@ -1060,7 +1133,7 @@ export default function CampaignGenerator() {
 
                                     <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-100/50">
                                         <p className="text-[10px] text-blue-700 font-medium leading-relaxed">
-                                            <strong>Ultra-Smart Logic:</strong> Targeting clients who currently have 
+                                    <strong>Ultra-Smart Logic:</strong> Targeting clients who currently have 
                                             <span className="font-bold underline mx-1">{serviceLogic === "AND" ? "ALL" : "ANY"}</span> 
                                             of the {selectedServices.length} selected services. 
                                             {selectedServices.length === 0 && " currently targeting everyone in this segment."}
@@ -1087,7 +1160,7 @@ export default function CampaignGenerator() {
                                 <label className="text-sm font-medium text-slate-700">Master Subject Line</label>
                                 <input
                                     type="text"
-                                    placeholder="e.g. Quick update for {{companyName}}"
+                                    placeholder={activeGuide?.subject || "e.g. Quick update for {{companyName}}"}
                                     value={topic}
                                     onChange={(e) => setTopic(e.target.value)}
                                     className="w-full bg-white border border-slate-300 rounded-md px-4 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-medium"
@@ -1098,7 +1171,7 @@ export default function CampaignGenerator() {
                                 <RichTextEditor
                                     content={coreMessage}
                                     onChange={setCoreMessage}
-                                    placeholder="Paste your sample emailer here. Use variables like {{greeting}}, {{firstName}}, or {{companyName}} for personalization..."
+                                    placeholder={activeGuide?.body || "Write your sample email here. Use variables like {{firstName}} and {{companyName}}."}
                                     sampleData={{
                                         clientName: "Example Corp",
                                         contactPerson: "John Smith",
@@ -1110,7 +1183,7 @@ export default function CampaignGenerator() {
                             <div className="p-4 bg-amber-50 rounded-lg border border-amber-100 flex gap-3">
                                 <Sparkles className="w-5 h-5 text-amber-500 shrink-0" />
                                 <p className="text-xs text-amber-900 leading-relaxed">
-                                    <strong>Personalization:</strong> AI will use your sample and create a custom version for each client.
+                                    <strong>Smart Tip:</strong> {activeGuide?.tip || "AI will personalize your sample for each client."}
                                 </p>
                             </div>
                         </div>
@@ -1254,6 +1327,7 @@ export default function CampaignGenerator() {
                 clients={targetClients}
                 loading={loadingTargetClients}
                 mode="oversight"
+                showActivityFilters={audienceSource === "INVOICE_SYSTEM"}
                 excludedIds={excludedClientIds}
                 onToggleExclusion={toggleExclusion}
                 onSetExcludedIds={setExcludedClientIds}
