@@ -279,7 +279,7 @@ export function ClientPickerModal({
                         onClick={onClose}
                         className="text-[10px] font-black text-slate-500 hover:text-slate-900 uppercase tracking-widest px-3 py-1.5 hover:bg-slate-50 rounded-lg transition-all"
                     >
-                        Dismiss
+                        {mode === "oversight" ? "Apply Selection" : "Use Client"}
                     </button>
                 </div>
             </div>

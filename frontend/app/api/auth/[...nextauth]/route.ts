@@ -13,22 +13,15 @@ const missingEnvVars = requiredEnvVars.filter((key) => {
   return !value || value.trim().length === 0 || value.includes("replace-with-");
 });
 
-if (missingEnvVars.length > 0) {
-  throw new Error(
-    `[NextAuth config] Missing required env vars: ${missingEnvVars.join(", ")}. ` +
-      "Set them in frontend/.env.local (or frontend/.env) and restart the Next.js dev server."
-  );
-}
-
-const googleClientId = process.env.GOOGLE_CLIENT_ID as string;
-const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET as string;
-const nextAuthSecret = process.env.NEXTAUTH_SECRET as string;
+const googleClientId = process.env.GOOGLE_CLIENT_ID;
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const nextAuthSecret = process.env.NEXTAUTH_SECRET;
 
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
-      clientId: googleClientId,
-      clientSecret: googleClientSecret,
+      clientId: googleClientId || "",
+      clientSecret: googleClientSecret || "",
       authorization: {
         params: {
           scope: "openid email profile https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://mail.google.com/",
@@ -68,5 +61,27 @@ export const authOptions: NextAuthOptions = {
   },
 };
 
-const handler = NextAuth(authOptions);
-export { handler as GET, handler as POST };
+const authHandler = NextAuth(authOptions);
+
+function missingEnvResponse() {
+  return Response.json(
+    {
+      success: false,
+      error: {
+        code: "AUTH_CONFIG_MISSING",
+        message: `Missing required auth env vars: ${missingEnvVars.join(", ")}.`,
+      },
+    },
+    { status: 500 }
+  );
+}
+
+export async function GET(req: Request, ctx: any) {
+  if (missingEnvVars.length > 0) return missingEnvResponse();
+  return authHandler(req as any, ctx);
+}
+
+export async function POST(req: Request, ctx: any) {
+  if (missingEnvVars.length > 0) return missingEnvResponse();
+  return authHandler(req as any, ctx);
+}
