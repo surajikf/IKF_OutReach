@@ -35,7 +35,7 @@ import {
     ShieldAlert,
     Timer,
     ZapOff,
-    Pulse
+    Pause
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { SmartLoader } from "@/frontend/components/SmartLoader";

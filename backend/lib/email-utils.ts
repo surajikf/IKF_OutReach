@@ -7,7 +7,7 @@ const ROLE_BASED_PREFIXES = [
     // General / Communication
     "info", "contact", "support", "help", "enquiry", "inquiries", "hello", "connect",
     // System / Automated
-    "noreply", "donotreply", "no-reply", "notification", "notifications", "alerts", "updates", "system", "auto", "automated", "update",
+    "noreply", "no_reply", "donotreply", "do_not_reply", "no-reply", "do-not-reply", "notification", "notifications", "alerts", "updates", "system", "auto", "automated", "update",
     // HR / Careers
     "career", "careers", "jobs", "hr", "recruitment", "hiring", "talent",
     // Sales / Business
@@ -17,7 +17,7 @@ const ROLE_BASED_PREFIXES = [
     // Billing / Accounts / Operational
     "accounts", "billing", "payments", "invoice", "finance", "amc", "office", "team",
     // Customer Service / Reception
-    "service", "customerservice", "care", "customercare", "feedback", "reception", "frontdesk",
+    "service", "services", "customerservice", "customer-service", "customer_service", "care", "customercare", "feedback", "reception", "frontdesk",
     // Internal / Testing / Junk
     "test", "testing", "demo", "dev", "developer", "qa", "staging", "sandbox", "junk", "temp", "temporary", "trash", "disposable"
 ];
@@ -25,10 +25,17 @@ const ROLE_BASED_PREFIXES = [
 // Patterns for systemic or auto-generated emails (e.g., user-123@, info.office@)
 const SYSTEMIC_PATTERNS = [
     /^noreply-/,
+    /^no_reply-/,
+    /^no-reply_/,
     /^no-reply-/,
+    /^donotreply-/,
+    /^do-not-reply-/,
     /^notifications-/,
     /^alert-/,
     /^update-/,
+    /^mailer-daemon/,
+    /^postmaster/,
+    /^bounce/,
     /^[a-f0-9]{8,}$/, // Hexadecimal hashes usually used for internal tracking
 ];
 

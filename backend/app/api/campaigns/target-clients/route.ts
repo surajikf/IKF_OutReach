@@ -3,6 +3,9 @@ import { ok, error } from "@/backend/lib/api-response";
 import { z } from "zod";
 
 const targetClientsQuerySchema = z.object({
+  audienceSource: z.enum(["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL"], {
+    message: "Audience source is required",
+  }),
   type: z.string().min(1, "Campaign type is required"),
   serviceFilters: z.array(z.string()).optional().default([]),
   serviceLogic: z.enum(["AND", "OR"]).optional().default("OR"),
@@ -22,8 +25,8 @@ export async function POST(request: Request) {
       });
     }
 
-    const { type, serviceFilters, serviceLogic, excludedClientIds, includeExclusions } = parsed.data;
-    const clients = await getTargetClients(type, serviceFilters, serviceLogic as any, excludedClientIds, includeExclusions);
+    const { audienceSource, type, serviceFilters, serviceLogic, excludedClientIds, includeExclusions } = parsed.data;
+    const clients = await getTargetClients(audienceSource, type, serviceFilters, serviceLogic as any, excludedClientIds, includeExclusions);
 
     return ok(clients);
   } catch (err) {

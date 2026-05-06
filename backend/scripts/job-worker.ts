@@ -115,6 +115,7 @@ async function runCampaignGenerate(job: JobRow) {
   // Job payload is created from the route handler (already validated),
   // so we assume structure is correct here.
   const {
+    audienceSource,
     type,
     topic,
     coreMessage,
@@ -127,6 +128,10 @@ async function runCampaignGenerate(job: JobRow) {
     serviceLogic = "OR",
   } = payload as any;
 
+  if (!audienceSource) {
+    throw new Error("Audience source is required for campaign generation jobs.");
+  }
+
   const settings = await getGlobalSettings();
   const aiProvider = settings.aiProvider || "Groq";
   const apiKey = aiProvider === "Groq" ? settings.groqApiKey : settings.openaiApiKey;
@@ -137,8 +142,8 @@ async function runCampaignGenerate(job: JobRow) {
 
   const targetClients: any[] = [];
   if (clientId) {
-    const client = await prisma.client.findUnique({
-      where: { id: clientId },
+    const client = await prisma.client.findFirst({
+      where: { id: clientId, source: audienceSource as any },
       select: {
         id: true,
         clientName: true,
@@ -156,7 +161,7 @@ async function runCampaignGenerate(job: JobRow) {
   const clients =
     targetClients.length > 0
       ? targetClients
-      : (await getTargetClients(type, serviceFilters, serviceLogic, excludedClientIds || [], false)).slice(0, 50);
+      : (await getTargetClients(audienceSource, type, serviceFilters, serviceLogic, excludedClientIds || [], false)).slice(0, 50);
 
   if (clients.length === 0) {
     return { count: 0 };

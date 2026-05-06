@@ -3,6 +3,9 @@ import { ok, error } from "@/backend/lib/api-response";
 import { z } from "zod";
 
 const estimateQuerySchema = z.object({
+    audienceSource: z.enum(["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL"], {
+        message: "Audience source is required",
+    }),
     type: z.string().min(1, "Campaign type is required"),
     serviceFilters: z.array(z.string()).optional().default([]),
     serviceLogic: z.enum(["AND", "OR"]).optional().default("OR"),
@@ -21,8 +24,8 @@ export async function POST(request: Request) {
             });
         }
 
-        const { type, serviceFilters, serviceLogic, excludedClientIds } = parsed.data;
-        const { count, industries } = await estimateCampaignAudience(type, serviceFilters, serviceLogic, excludedClientIds);
+        const { audienceSource, type, serviceFilters, serviceLogic, excludedClientIds } = parsed.data;
+        const { count, industries } = await estimateCampaignAudience(audienceSource, type, serviceFilters, serviceLogic, excludedClientIds);
 
         return ok({ count, industries });
     } catch (err) {

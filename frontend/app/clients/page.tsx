@@ -5,7 +5,6 @@ import { formatDistanceToNow } from "date-fns";
 import { 
     Search, 
     Filter, 
-    Plus, 
     MoreVertical, 
     Mail, 
     Building2, 
@@ -837,14 +836,7 @@ export default function ClientManager() {
                             Role-Based
                         </button>
                     </div>
-                    {view === "clients" ? (
-                        <button
-                            onClick={() => { setSelectedClient(null); setIsModalOpen(true); }}
-                            className="bg-blue-600 text-white px-6 py-2 rounded-md text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm active:scale-[0.98]"
-                        >
-                            Add Client
-                        </button>
-                    ) : view === "services" ? (
+                    {view === "services" ? (
                         <button
                             onClick={() => { setEditingService(null); setNewServiceData({ serviceName: "", category: "Digital", description: "" }); setIsServiceModalOpen(true); }}
                             className="bg-slate-900 text-white px-6 py-2 rounded-md text-sm font-semibold hover:bg-slate-800 transition-colors shadow-sm active:scale-[0.98]"
@@ -860,7 +852,7 @@ export default function ClientManager() {
                     <div className="sticky top-4 z-40 flex flex-col gap-3 bg-white/80 backdrop-blur-xl p-5 rounded-3xl border border-slate-200/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all">
                         {/* Mini Dashboard for Sources */}
                         <div className="flex flex-wrap gap-2 px-1">
-                            {Object.entries(sourceStats).map(([source, stats]: any, idx) => {
+                            {Object.entries(sourceStats).filter(([source]) => source !== "MANUAL").map(([source, stats]: any, idx) => {
                             const icons: Record<string, any> = {
                                 INVOICE_SYSTEM: DownloadCloud,
                                 ZOHO_BIGIN: Database,
@@ -966,7 +958,6 @@ export default function ClientManager() {
                                 <FilterPopover
                                     label="Source"
                                     options={[
-                                        { label: "Manual", value: "MANUAL" },
                                         { label: "Zoho", value: "ZOHO_BIGIN" },
                                         { label: "Gmail", value: "GMAIL" },
                                         { label: "Invoice", value: "INVOICE_SYSTEM" },
@@ -1114,13 +1105,6 @@ export default function ClientManager() {
                                                     >
                                                         <Upload className="w-3.5 h-3.5" />
                                                         Go to Integrations
-                                                    </button>
-                                                    <button
-                                                        onClick={() => { setSelectedClient(null); setIsModalOpen(true); }}
-                                                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 border border-slate-900 uppercase tracking-widest"
-                                                    >
-                                                        <Plus className="w-3.5 h-3.5" />
-                                                        Add First Client
                                                     </button>
                                                 </div>
                                             </div>

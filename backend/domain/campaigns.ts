@@ -1,6 +1,7 @@
 import prisma from "@/backend/lib/prisma";
 
 export type CampaignType = "Broadcast" | "Targeted" | "Cross-Sell" | "Reactivation" | "Reactivate" | string;
+export type AudienceSource = "INVOICE_SYSTEM" | "ZOHO_BIGIN" | "GMAIL";
 
 function getRelationshipFilterForType(type: CampaignType) {
   const normalizedType = String(type || "").toLowerCase();
@@ -43,6 +44,7 @@ function getRelationshipFilterForType(type: CampaignType) {
 }
 
 function buildAudienceWhere(
+  audienceSource: AudienceSource,
   type: CampaignType,
   serviceFilters: string[] = [],
   serviceLogic: "AND" | "OR" = "OR",
@@ -51,7 +53,8 @@ function buildAudienceWhere(
 ) {
   const clauses: any[] = [
     { isBlocked: false },
-    { isRoleBased: false }
+    { isRoleBased: false },
+    { source: audienceSource },
   ];
   const relationshipFilter = getRelationshipFilterForType(type);
 
@@ -70,7 +73,7 @@ function buildAudienceWhere(
   }
 
   // Ultra-Smart Multi-Service Segmentation
-  if (serviceFilters.length > 0 && !serviceFilters.includes("All")) {
+  if (audienceSource === "INVOICE_SYSTEM" && serviceFilters.length > 0 && !serviceFilters.includes("All")) {
     const serviceQueries = serviceFilters.map((service) => ({
       invoiceServiceNames: { contains: service, mode: "insensitive" as const },
     }));
@@ -81,8 +84,14 @@ function buildAudienceWhere(
   return clauses.length > 0 ? { AND: clauses } : {};
 }
 
-export async function estimateCampaignAudience(type: CampaignType, serviceFilters: string[] = [], serviceLogic: 'AND' | 'OR' = 'OR', excludedIds: string[] = []) {
-  const where = buildAudienceWhere(type, serviceFilters, serviceLogic, excludedIds, false);
+export async function estimateCampaignAudience(
+  audienceSource: AudienceSource,
+  type: CampaignType,
+  serviceFilters: string[] = [],
+  serviceLogic: 'AND' | 'OR' = 'OR',
+  excludedIds: string[] = []
+) {
+  const where = buildAudienceWhere(audienceSource, type, serviceFilters, serviceLogic, excludedIds, false);
 
   // Sequentialize to avoid PgBouncer/Transaction mode concurrency hangs
   const count = await prisma.client.count({ where });
@@ -140,8 +149,15 @@ export async function listCampaignHistory(filter: CampaignHistoryFilter = {}) {
   return history;
 }
 
-export async function getTargetClients(type: CampaignType, serviceFilters: string[] = [], serviceLogic: 'AND' | 'OR' = 'OR', excludedIds: string[] = [], includeExclusions: boolean = false) {
-  const where = buildAudienceWhere(type, serviceFilters, serviceLogic, excludedIds, includeExclusions);
+export async function getTargetClients(
+  audienceSource: AudienceSource,
+  type: CampaignType,
+  serviceFilters: string[] = [],
+  serviceLogic: 'AND' | 'OR' = 'OR',
+  excludedIds: string[] = [],
+  includeExclusions: boolean = false
+) {
+  const where = buildAudienceWhere(audienceSource, type, serviceFilters, serviceLogic, excludedIds, includeExclusions);
 
   return await prisma.client.findMany({
     where,
@@ -155,6 +171,7 @@ export async function getTargetClients(type: CampaignType, serviceFilters: strin
       clientAddedOn: true,
       lastInvoiceDate: true,
       invoiceServiceNames: true,
+      source: true,
     },
     orderBy: { clientName: "asc" },
   });
