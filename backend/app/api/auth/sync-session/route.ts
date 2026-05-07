@@ -65,14 +65,18 @@ export async function POST(request: Request) {
 
         console.log(`[IDENTITY_SYNC] Syncing identity: ${email} | Send: ${hasSendPermission} | SMTP: ${hasSmtpPermission} | Read: ${hasReadPermission}`);
 
-        const existingAccount = await prisma.gmailAccount.findUnique({
-            where: { email },
+        const existingAccount = await prisma.gmailAccount.findFirst({
+            where: {
+                userId: session.user.id as string,
+                email,
+            },
             select: { id: true, refreshTokenEncrypted: true, isDefault: true },
         });
 
         // Update or Create the Identity Node
         const upsertData: any = {
             accountName: safeName || email.split("@")[0].replace(/[._]/g, " "),
+            userId: session.user.id as string,
             email: email,
             scopeGranted: hasSmtpPermission,
             updatedAt: new Date(),
@@ -101,7 +105,12 @@ export async function POST(request: Request) {
         }
 
         const account = await prisma.gmailAccount.upsert({
-            where: { email: email },
+            where: {
+                userId_email: {
+                    userId: session.user.id as string,
+                    email,
+                },
+            },
             update: upsertData,
             create: {
                 ...upsertData,

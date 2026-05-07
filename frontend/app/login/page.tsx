@@ -2,15 +2,21 @@
 
 import { signIn } from "next-auth/react";
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useBranding } from "@/frontend/hooks/useBranding";
 import { toast } from "sonner";
 import Link from "next/link";
+import { appPath } from "@/frontend/lib/app-path";
 
 export default function LoginPage() {
+    const { data: session, status: authStatus } = useSession();
+    const router = useRouter();
     const [mounted, setMounted] = useState(false);
     const [loading, setLoading] = useState(false);
-    const { projectName, projectLogo } = useBranding();
+    const { projectLogo } = useBranding();
+    const authBrandName = "IKF Outreach";
 
     useEffect(() => {
         setMounted(true);
@@ -24,6 +30,16 @@ export default function LoginPage() {
             }
         }
     }, []);
+
+    useEffect(() => {
+        if (authStatus !== "authenticated") return;
+        const userStatus = (session?.user as any)?.status || "PENDING";
+        if (userStatus === "PENDING") {
+            router.replace(appPath("/pending-approval"));
+            return;
+        }
+        router.replace(appPath("/"));
+    }, [authStatus, session, router]);
 
     const handleGoogleLogin = async () => {
         setLoading(true);
@@ -49,15 +65,15 @@ export default function LoginPage() {
                     <div className="text-center mb-10">
                         {projectLogo ? (
                             <div className="bg-slate-900 p-3 rounded-2xl shadow-lg border border-slate-800 flex items-center justify-center min-w-[4rem] w-fit mx-auto mb-6">
-                                <img src={projectLogo} alt={projectName} className="h-10 w-auto object-contain" />
+                                <img src={projectLogo} alt={authBrandName} className="h-10 w-auto object-contain" />
                             </div>
                         ) : (
                             <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl mx-auto flex items-center justify-center mb-5 shadow-lg shadow-blue-500/30">
-                                <span className="text-white text-2xl font-black">{projectName.charAt(0)}</span>
+                                <span className="text-white text-2xl font-black">{authBrandName.charAt(0)}</span>
                             </div>
                         )}
                         <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 tracking-tight">
-                            {projectName}
+                            {authBrandName}
                         </h1>
                         <p className="text-sm font-medium text-slate-500 mt-2">Welcome back</p>
                     </div>

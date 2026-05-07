@@ -5,6 +5,7 @@ import { createClient, listClients, RelationshipLevel } from "@/backend/domain/c
 import { z } from "zod";
 import { ok, error } from "@/backend/lib/api-response";
 import { parseJsonBody } from "@/backend/lib/validation";
+import { getBackendSession, hasInvoiceAccess } from "@/backend/lib/auth";
 
 function computeClientQuality(client: {
     email: string | null;
@@ -68,11 +69,17 @@ const createClientSchema = z.object({
 
 export async function GET(request: Request) {
     try {
+        const session = await getBackendSession(request);
+        const userId = session?.user?.id;
         const { searchParams } = new URL(request.url);
         const industries = searchParams.getAll("industry");
         const levels = searchParams.getAll("level");
         const serviceIds = searchParams.getAll("service");
-        const sources = searchParams.getAll("source");
+        const requestedSources = searchParams.getAll("source");
+        const canUseInvoice = await hasInvoiceAccess(request);
+        const sources = requestedSources.length > 0
+            ? requestedSources.filter((s) => canUseInvoice || s !== "INVOICE_SYSTEM")
+            : (canUseInvoice ? [] : ["ZOHO_BIGIN", "GMAIL", "MANUAL"]);
         const showRoleBased = (searchParams.get("roleBased") === "true") || (searchParams.get("showRoleBased") === "true");
         const isSmartView = searchParams.get("smart") === "true";
         const search = searchParams.get("search")?.trim() || "";
@@ -83,17 +90,20 @@ export async function GET(request: Request) {
         const pageSizeRaw = parseInt(searchParams.get("pageSize") || "25", 10) || 25;
 
         // Fetch granular source stats for the mini dashboard
+        const statsBaseWhere: any = canUseInvoice ? {} : { source: { not: "INVOICE_SYSTEM" } };
         const [sourceStatsRaw, gmailStatsRaw, gmailAccounts] = await Promise.all([
             prisma.client.groupBy({
                 by: ['source', 'relationshipLevel'],
-                _count: { _all: true }
+                _count: { _all: true },
+                where: statsBaseWhere,
             }),
             prisma.client.groupBy({
                 by: ['gmailSourceAccount'],
-                where: { source: 'GMAIL' },
+                where: { ...statsBaseWhere, source: 'GMAIL' },
                 _count: { _all: true }
             }),
             prisma.gmailAccount.findMany({
+                where: userId ? { userId } : undefined,
                 select: { accountName: true, email: true }
             }),
         ]);
@@ -125,7 +135,7 @@ export async function GET(request: Request) {
         // Add Zoho specifics (Tags breakdown for the mini-dashboard tooltips)
         if (sourceStats['ZOHO_BIGIN']) {
             const zohoClients = await prisma.client.findMany({
-                where: { source: 'ZOHO_BIGIN' },
+                where: { ...statsBaseWhere, source: 'ZOHO_BIGIN' },
                 select: { zohoTags: true }
             });
             
@@ -141,7 +151,8 @@ export async function GET(request: Request) {
         // Fetch Filter Distribution Stats (Smart Targeting Data)
         const statsWhere = {
             isRoleBased: showRoleBased,
-            isBlocked: false
+            isBlocked: false,
+            ...(canUseInvoice ? {} : { source: { not: "INVOICE_SYSTEM" as const } }),
         };
 
         const [industryGroup, levelGroup, serviceGroup] = await Promise.all([

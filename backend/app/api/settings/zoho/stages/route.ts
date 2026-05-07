@@ -1,7 +1,7 @@
 import prisma from "@/backend/lib/prisma";
 import crypto from "crypto";
 import { ok, error } from "@/backend/lib/api-response";
-import { isAdmin } from "@/backend/lib/auth";
+import { getBackendSession, isApprovedUser } from "@/backend/lib/auth";
 
 const RAW_ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "default_insecure_key_123456789012";
 const ENCRYPTION_KEY = RAW_ENCRYPTION_KEY.padEnd(32, "0").substring(0, 32);
@@ -27,21 +27,27 @@ function decrypt(encryptedText: string | null): string | null {
 
 export async function GET(req: Request) {
     try {
-        if (!await isAdmin(req)) {
+        if (!await isApprovedUser(req)) {
             return error("FORBIDDEN", "Unauthorized access.", { status: 403 });
         }
+        const session = await getBackendSession(req);
+        if (!session?.user?.id) return error("UNAUTHORIZED", "Sign in required.", { status: 401 });
 
         const settingsList = await prisma.$queryRawUnsafe(`SELECT * FROM "GlobalSettings" LIMIT 1`) as any[];
         const settings = settingsList?.[0];
+        const zohoConnection = await prisma.zohoConnection.findUnique({
+            where: { userId: session.user.id },
+            select: { refreshTokenEncrypted: true, grantedScopes: true },
+        });
         
-        if (!settings || !settings.zohoClientIdEncrypted || !settings.zohoClientSecretEncrypted || !settings.zohoRefreshTokenEncrypted) {
+        if (!settings || !settings.zohoClientIdEncrypted || !settings.zohoClientSecretEncrypted || !zohoConnection?.refreshTokenEncrypted) {
             return error("NOT_CONFIGURED", "Zoho settings not fully configured.");
         }
 
         console.log("[ZOHO_STAGES] Decrypting credentials...");
         const clientId = decrypt(settings.zohoClientIdEncrypted);
         const clientSecret = decrypt(settings.zohoClientSecretEncrypted);
-        const refreshToken = decrypt(settings.zohoRefreshTokenEncrypted);
+        const refreshToken = decrypt(zohoConnection.refreshTokenEncrypted);
 
         if (!clientId || !clientSecret || !refreshToken) {
             console.error("[ZOHO_STAGES] Decryption failed or empty credentials.");
@@ -117,7 +123,7 @@ export async function GET(req: Request) {
             const errText = await pipelineRes.text();
             console.error(`[ZOHO_STAGES] ${fallbackUsed ? 'v1' : 'v2'} fetch failed:`, pipelineRes.status, errText);
             return error("ZOHO_API_ERROR", `${fallbackUsed ? 'V1 Fallback' : 'V2 API'} Error: ${pipelineRes.status} ${errText}`, {
-                details: { grantedScopes: (settings as any).zohoGrantedScopes }
+                details: { grantedScopes: zohoConnection.grantedScopes }
             });
         }
 

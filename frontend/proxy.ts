@@ -19,11 +19,19 @@ export async function proxy(request: NextRequest) {
         return NextResponse.next();
     }
 
-    // 2. Auth Routes logic
+    // 2. Auth and status routes logic
     const isAuthRoute = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password';
-    
+    const status = (token as any)?.status || 'APPROVED';
+
+    // Public auth pages: logged-in users should not stay on login/register screens.
     if (isAuthRoute) {
         if (token) {
+            if (status === 'PENDING') {
+                return NextResponse.redirect(new URL(withBasePath('/pending-approval'), request.url));
+            }
+            if (status === 'BANNED') {
+                return NextResponse.redirect(new URL(withBasePath('/banned'), request.url));
+            }
             return NextResponse.redirect(new URL(withBasePath('/'), request.url));
         }
         return NextResponse.next();
@@ -42,15 +50,16 @@ export async function proxy(request: NextRequest) {
         return NextResponse.redirect(new URL(withBasePath('/'), request.url));
     }
 
-    // Redirect banned users (if we still use this logic, for now assuming role/status is in token)
-    // Note: If status is needed, it should be added to the JWT token in callbacks
-    const status = (token as any).status || 'APPROVED';
-    
+    // Redirect users by account status
+    if (status === 'PENDING' && pathname !== '/pending-approval' && pathname !== '/login' && pathname !== '/register') {
+        return NextResponse.redirect(new URL(withBasePath('/pending-approval'), request.url));
+    }
+
     if (status === 'BANNED' && pathname !== '/banned' && pathname !== '/update-password') {
         return NextResponse.redirect(new URL(withBasePath('/banned'), request.url));
     }
 
-    if (status === 'APPROVED' && pathname === '/banned') {
+    if (status === 'APPROVED' && (pathname === '/banned' || pathname === '/pending-approval')) {
         return NextResponse.redirect(new URL(withBasePath('/'), request.url));
     }
 

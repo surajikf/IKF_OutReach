@@ -7,11 +7,11 @@ import { z } from "zod";
 import { getTargetClients } from "@/backend/domain/campaigns";
 import { dedupeLeadingSalutation, normalizeEmailBodyHtml } from "@/shared/lib/email-format";
 import { evaluateEmailQuality } from "@/shared/lib/campaign-quality";
+import { hasInvoiceAccess } from "@/backend/lib/auth";
 
 const generateCampaignSchema = z.object({
-    audienceSource: z.enum(["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL"], {
-        message: "Audience source is required",
-    }),
+    audienceSource: z.enum(["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL"]).optional(),
+    audienceSources: z.array(z.enum(["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL"])).optional(),
     type: z.string().min(1, "Campaign type is required"),
     topic: z.string().min(1, "Topic is required"),
     coreMessage: z.string().min(1, "Core message is required"),
@@ -61,7 +61,16 @@ export async function POST(request: Request) {
             return ok({ jobId: job.id }, { status: 202 });
         }
 
-        const { audienceSource, type, topic, coreMessage, cta, sampleOnly, clientId, styleGuide, styleMemory, excludedClientIds, serviceFilters, serviceLogic } = payload;
+        const { audienceSource, audienceSources, type, topic, coreMessage, cta, sampleOnly, clientId, styleGuide, styleMemory, excludedClientIds, serviceFilters, serviceLogic } = payload;
+        const resolvedSources = (audienceSources && audienceSources.length > 0)
+            ? audienceSources
+            : (audienceSource ? [audienceSource] : []);
+        if (resolvedSources.length === 0) {
+            return error("VALIDATION_ERROR", "Audience source is required", { status: 400 });
+        }
+        if (resolvedSources.includes("INVOICE_SYSTEM") && !await hasInvoiceAccess(request)) {
+            return error("FORBIDDEN", "Invoice data access is not enabled for this user.", { status: 403 });
+        }
 
         // 1. Initial Matrix Calibration (Dynamic Settings)
         const settings = await getGlobalSettings();
@@ -76,7 +85,7 @@ export async function POST(request: Request) {
         if (sampleOnly && clientId) {
             // Specific client requested for sample
             const client = await prisma.client.findFirst({
-                where: { id: clientId, source: audienceSource as any },
+                where: { id: clientId, source: { in: resolvedSources as any } },
                 select: {
                     id: true,
                     clientName: true,
@@ -92,7 +101,7 @@ export async function POST(request: Request) {
             if (client) targetClients = [client];
         } else {
             // Fetch potential targets respecting segmentation and exclusions
-            const allTargets = await getTargetClients(audienceSource, type, serviceFilters, serviceLogic, excludedClientIds);
+            const allTargets = await getTargetClients(resolvedSources as any, type, serviceFilters, serviceLogic, excludedClientIds);
             
             if (sampleOnly) {
                 // Pick one "random" (first) client for the sample

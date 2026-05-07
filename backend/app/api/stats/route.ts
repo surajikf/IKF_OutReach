@@ -1,6 +1,7 @@
 import prisma from "@/backend/lib/prisma";
 import { startOfDay, subDays } from "date-fns";
 import { ok, error } from "@/backend/lib/api-response";
+import { getBackendSession } from "@/backend/lib/auth";
 import {
     buildProcessChecklist,
     computeAudienceState,
@@ -9,8 +10,10 @@ import {
     pickNextBestAction,
 } from "@/shared/lib/dashboard-logic";
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        const session = await getBackendSession(request);
+        const userId = session?.user?.id;
         type SourceCount = { source: string; gmailSourceAccount: string | null; _count: number };
         type DailyCampaign = { dateCreated: Date };
         type DailyClient = { createdAt: Date };
@@ -116,15 +119,16 @@ export async function GET() {
             prisma.globalSettings.findUnique({
                 where: { id: "singleton" },
                 select: {
-                    zohoRefreshTokenEncrypted: true,
                     googleRefreshTokenEncrypted: true,
                 },
             }),
             prisma.gmailAccount.findMany({
+                where: userId ? { userId } : undefined,
                 select: { accountName: true, email: true }
             }),
         ]);
-        const integrationReady = !!(integrationConfig?.zohoRefreshTokenEncrypted || integrationConfig?.googleRefreshTokenEncrypted || gmailAccounts.length > 0);
+        const zohoConnected = userId ? await prisma.zohoConnection.count({ where: { userId } }) : 0;
+        const integrationReady = !!(zohoConnected > 0 || integrationConfig?.googleRefreshTokenEncrypted || gmailAccounts.length > 0);
 
         const totalClients = dataIntegrityRaw[0];
         const completeProfiles = dataIntegrityRaw[1];

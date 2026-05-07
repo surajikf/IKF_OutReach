@@ -1,14 +1,14 @@
-import prisma from "../lib/prisma.ts";
-import { getGlobalSettings } from "../lib/settings.ts";
-import { getTargetClients } from "../domain/campaigns.ts";
-import { getSmartGreeting, replaceVariables } from "../shared/lib/utils.ts";
-import { dedupeLeadingSalutation, normalizeEmailBodyHtml } from "../shared/lib/email-format.ts";
-import { wrapInEmailTemplate } from "../shared/lib/email-template.ts";
-import { sanitizeEmailHtml } from "../shared/lib/email-sanitize.ts";
-import { evaluateEmailQuality } from "../shared/lib/campaign-quality.ts";
-import { sendStrategicEmail } from "../lib/mail.ts";
-import { parseCampaignGeneratedOutput } from "../shared/lib/campaign-output.ts";
-import { runGmailSync } from "../lib/workers/gmail-sync.ts";
+import prisma from "../lib/prisma";
+import { getGlobalSettings } from "../lib/settings";
+import { getTargetClients } from "../domain/campaigns";
+import { getSmartGreeting, replaceVariables } from "../shared/lib/utils";
+import { dedupeLeadingSalutation, normalizeEmailBodyHtml } from "../shared/lib/email-format";
+import { wrapInEmailTemplate } from "../shared/lib/email-template";
+import { sanitizeEmailHtml } from "../shared/lib/email-sanitize";
+import { evaluateEmailQuality } from "../shared/lib/campaign-quality";
+import { createStrategicGmailDraft, sendStrategicEmail } from "../lib/mail";
+import { parseCampaignGeneratedOutput } from "../shared/lib/campaign-output";
+import { runGmailSync } from "../lib/workers/gmail-sync";
 
 import Groq from "groq-sdk";
 
@@ -116,6 +116,7 @@ async function runCampaignGenerate(job: JobRow) {
   // so we assume structure is correct here.
   const {
     audienceSource,
+    audienceSources,
     type,
     topic,
     coreMessage,
@@ -128,7 +129,14 @@ async function runCampaignGenerate(job: JobRow) {
     serviceLogic = "OR",
   } = payload as any;
 
-  if (!audienceSource) {
+  const resolvedSources: Array<"INVOICE_SYSTEM" | "ZOHO_BIGIN" | "GMAIL"> =
+    Array.isArray(audienceSources) && audienceSources.length > 0
+      ? audienceSources
+      : audienceSource
+        ? [audienceSource]
+        : [];
+
+  if (resolvedSources.length === 0) {
     throw new Error("Audience source is required for campaign generation jobs.");
   }
 
@@ -143,7 +151,7 @@ async function runCampaignGenerate(job: JobRow) {
   const targetClients: any[] = [];
   if (clientId) {
     const client = await prisma.client.findFirst({
-      where: { id: clientId, source: audienceSource as any },
+      where: { id: clientId, source: { in: resolvedSources as any } },
       select: {
         id: true,
         clientName: true,
@@ -161,7 +169,7 @@ async function runCampaignGenerate(job: JobRow) {
   const clients =
     targetClients.length > 0
       ? targetClients
-      : (await getTargetClients(audienceSource, type, serviceFilters, serviceLogic, excludedClientIds || [], false)).slice(0, 50);
+      : (await getTargetClients(resolvedSources as any, type, serviceFilters, serviceLogic, excludedClientIds || [], false)).slice(0, 50);
 
   if (clients.length === 0) {
     return { count: 0 };
@@ -447,6 +455,7 @@ async function runCampaignGenerate(job: JobRow) {
 async function runDispatchBatch(job: JobRow) {
   const payload = job.payload as any;
   const campaignIds: string[] = Array.isArray(payload?.campaignIds) ? payload.campaignIds : [];
+  const dispatchMode: "SEND" | "DRAFT" = payload?.dispatchMode === "DRAFT" ? "DRAFT" : "SEND";
 
   const total = campaignIds.length;
   let successCount = 0;
@@ -472,12 +481,19 @@ async function runDispatchBatch(job: JobRow) {
 
       const htmlBody = wrapInEmailTemplate("standard", synchronizedBody, campaign.client.clientName);
 
-      const result = await sendStrategicEmail({
-        to: campaign.client.email,
-        subject,
-        html: htmlBody,
-        text: body.replace(/<[^>]*>/g, ""),
-      });
+      const result = dispatchMode === "DRAFT"
+        ? await createStrategicGmailDraft({
+            to: campaign.client.email,
+            subject,
+            html: htmlBody,
+            text: body.replace(/<[^>]*>/g, ""),
+          })
+        : await sendStrategicEmail({
+            to: campaign.client.email,
+            subject,
+            html: htmlBody,
+            text: body.replace(/<[^>]*>/g, ""),
+          });
 
       if (!result.success) {
         throw new Error(result.error || "Email dispatch failed.");
@@ -500,6 +516,7 @@ async function runDispatchBatch(job: JobRow) {
   }
 
   return {
+    mode: dispatchMode,
     total,
     successCount,
     failureCount: failures.length,

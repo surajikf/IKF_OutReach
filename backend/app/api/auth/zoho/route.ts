@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/backend/lib/prisma";
 import crypto from "crypto";
+import { getBackendSession, isApprovedUser } from "@/backend/lib/auth";
 
 const RAW_ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "default_insecure_key_123456789012";
 const ENCRYPTION_KEY = RAW_ENCRYPTION_KEY.padEnd(32, '0').substring(0, 32);
@@ -23,6 +24,14 @@ function decrypt(encryptedText: string): string | null {
 
 export async function GET(req: Request) {
     try {
+        if (!await isApprovedUser(req)) {
+            return NextResponse.json({ error: "Unauthorized." }, { status: 403 });
+        }
+        const session = await getBackendSession(req);
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+        }
+
         const settings = await prisma.globalSettings.findFirst();
 
         if (!settings || !settings.zohoClientIdEncrypted) {

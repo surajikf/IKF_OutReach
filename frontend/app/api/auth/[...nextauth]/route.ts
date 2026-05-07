@@ -16,6 +16,7 @@ const missingEnvVars = requiredEnvVars.filter((key) => {
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const nextAuthSecret = process.env.NEXTAUTH_SECRET;
+const backendInternalUrl = process.env.BACKEND_INTERNAL_URL?.trim().replace(/\/+$/, "") || "http://localhost:3001";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -34,6 +35,23 @@ export const authOptions: NextAuthOptions = {
   secret: nextAuthSecret,
   debug: process.env.NODE_ENV === "development",
   callbacks: {
+    async signIn({ user }) {
+      const email = (user.email || "").trim().toLowerCase();
+      if (!email) return false;
+      const res = await fetch(`${backendInternalUrl}/api/auth/claims`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, name: user.name || null }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      const status = payload?.data?.user?.status;
+      // Keep sign-in successful for known statuses so JWT/session can be created.
+      // Route gating for PENDING/BANNED is handled in middleware and app pages.
+      if (status === "PENDING" || status === "BANNED" || status === "APPROVED") {
+        return true;
+      }
+      return false;
+    },
     async jwt({ token, account, profile }) {
       // 1) Handle initial login: capture tokens and email
       if (account) {
@@ -45,14 +63,40 @@ export const authOptions: NextAuthOptions = {
         token.email = profile.email;
       }
 
-      // 2) Assign role based on email (as per previous session preference)
-      token.role = token.email === "suraj.sonnar@ikf.co.in" ? "ADMIN" : "USER";
+      const email = (token.email || "").trim().toLowerCase();
+      if (email) {
+        try {
+          const res = await fetch(`${backendInternalUrl}/api/auth/claims`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, name: (profile as any)?.name || null }),
+          });
+          const payload = await res.json().catch(() => ({}));
+          const user = payload?.data?.user;
+          if (user) {
+            token.sub = user.id;
+            (token as any).role = user.role;
+            (token as any).status = user.status;
+            (token as any).invoiceAccess = Boolean(user.canAccessInvoiceData);
+          } else {
+            (token as any).role = "USER";
+            (token as any).status = "PENDING";
+            (token as any).invoiceAccess = false;
+          }
+        } catch {
+          (token as any).role = "USER";
+          (token as any).status = "PENDING";
+          (token as any).invoiceAccess = false;
+        }
+      }
       
       return token;
     },
     async session({ session, token }) {
       (session.user as any).email = token.email;
       (session.user as any).role = token.role;
+      (session.user as any).status = (token as any).status || "PENDING";
+      (session.user as any).invoiceAccess = Boolean((token as any).invoiceAccess);
       (session.user as any).accessToken = token.accessToken;
       (session.user as any).refreshToken = token.refreshToken;
       (session.user as any).scope = token.scope;

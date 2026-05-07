@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/backend/lib/prisma";
 import { decrypt, encrypt } from "@/backend/lib/encryption";
+import { getBackendSession } from "@/backend/lib/auth";
 
 type GmailConnectIntent = "send" | "sync" | "both";
 
@@ -40,6 +41,13 @@ async function resolveGoogleClientConfig() {
 
 export async function GET(request: Request) {
     try {
+        const session = await getBackendSession(request);
+        if (!session?.user?.id) {
+            return NextResponse.redirect(
+                `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/login?auth=expired`
+            );
+        }
+
         const url = new URL(request.url);
         const code = url.searchParams.get("code");
         const state = url.searchParams.get("state");
@@ -91,11 +99,11 @@ export async function GET(request: Request) {
         
         // Check if any default account exists
         const defaultAccount = await prisma.gmailAccount.findFirst({
-            where: { isDefault: true }
+            where: { userId: session.user.id, isDefault: true }
         });
 
-        const existingAccount = await (prisma.gmailAccount as any).findUnique({
-            where: { email },
+        const existingAccount = await (prisma.gmailAccount as any).findFirst({
+            where: { userId: session.user.id, email },
         });
 
         const refreshTokenEncrypted =
@@ -121,6 +129,7 @@ export async function GET(request: Request) {
         const accountData: any = {
             email,
             accountName: label || email.split("@")[0],
+            userId: session.user.id,
             refreshTokenEncrypted,
             accessTokenEncrypted: encrypt(access_token),
             expiresAt,
@@ -138,7 +147,12 @@ export async function GET(request: Request) {
         };
 
         await (prisma.gmailAccount as any).upsert({
-            where: { email },
+            where: {
+                userId_email: {
+                    userId: session.user.id,
+                    email,
+                },
+            },
             update: {
                 accountName: accountData.accountName,
                 refreshTokenEncrypted: accountData.refreshTokenEncrypted,

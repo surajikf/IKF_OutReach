@@ -1,7 +1,7 @@
 import prisma from "@/backend/lib/prisma";
 import crypto from "crypto";
 import { error, ok } from "@/backend/lib/api-response";
-import { isAdmin } from "@/backend/lib/auth";
+import { getBackendSession, isApprovedUser } from "@/backend/lib/auth";
 
 const RAW_ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "default_insecure_key_123456789012";
 const ENCRYPTION_KEY = RAW_ENCRYPTION_KEY.padEnd(32, "0").substring(0, 32);
@@ -27,21 +27,27 @@ function decrypt(encryptedText: string | null): string | null {
 
 export async function GET(req: Request) {
   try {
-    if (!await isAdmin(req)) {
+    if (!await isApprovedUser(req)) {
       return error("FORBIDDEN", "Unauthorized access.", { status: 403 });
     }
+    const session = await getBackendSession(req);
+    if (!session?.user?.id) return error("UNAUTHORIZED", "Sign in required.", { status: 401 });
 
     const settingsList = await prisma.$queryRawUnsafe(`SELECT * FROM "GlobalSettings" LIMIT 1`) as any[];
     const settings = settingsList?.[0];
+    const zohoConnection = await prisma.zohoConnection.findUnique({
+      where: { userId: session.user.id },
+      select: { refreshTokenEncrypted: true, grantedScopes: true },
+    });
 
-    if (!settings || !settings.zohoRefreshTokenEncrypted) {
+    if (!settings || !zohoConnection?.refreshTokenEncrypted) {
       return error("BAD_REQUEST", "Zoho is not connected.");
     }
 
     console.log("[ZOHO_FIELDS] Decrypting credentials...");
     const clientId = decrypt(settings.zohoClientIdEncrypted);
     const clientSecret = decrypt(settings.zohoClientSecretEncrypted);
-    const refreshToken = decrypt(settings.zohoRefreshTokenEncrypted);
+    const refreshToken = decrypt(zohoConnection.refreshTokenEncrypted);
 
     if (!clientId || !clientSecret || !refreshToken) {
       console.error("[ZOHO_FIELDS] Decryption failed or empty credentials.");
@@ -91,7 +97,7 @@ export async function GET(req: Request) {
         const status = !pipelinesFieldsRes.ok ? pipelinesFieldsRes.status : contactsFieldsRes.status;
         console.error(`[ZOHO_FIELDS] Metadata fetch failed for ${failedModule}`);
         return error("ZOHO_API_ERROR", `Failed to fetch ${failedModule} metadata (${status}).`, {
-            details: { grantedScopes: (settings as any).zohoGrantedScopes }
+            details: { grantedScopes: zohoConnection.grantedScopes }
         });
     }
 

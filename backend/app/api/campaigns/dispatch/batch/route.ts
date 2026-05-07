@@ -4,6 +4,7 @@ import { z } from "zod";
 
 const dispatchBatchSchema = z.object({
   campaignIds: z.array(z.string().min(1)).min(1),
+  dispatchMode: z.enum(["SEND", "DRAFT"]).optional().default("SEND"),
 });
 
 export async function POST(request: Request) {
@@ -33,4 +34,3 @@ export async function POST(request: Request) {
     return error("INTERNAL_ERROR", "Failed to enqueue dispatch batch.");
   }
 }
-

@@ -22,6 +22,8 @@ export async function getBackendSession(req: NextRequest | Request) {
             id: token.sub,
             email: token.email,
             role: (token as any).role || "USER",
+            status: (token as any).status || "PENDING",
+            invoiceAccess: Boolean((token as any).invoiceAccess),
         },
     };
 }
@@ -29,4 +31,15 @@ export async function getBackendSession(req: NextRequest | Request) {
 export async function isAdmin(req: NextRequest | Request) {
     const session = await getBackendSession(req);
     return session?.user?.role === "ADMIN";
+}
+
+export async function isApprovedUser(req: NextRequest | Request) {
+    const session = await getBackendSession(req);
+    return session?.user?.status === "APPROVED";
+}
+
+export async function hasInvoiceAccess(req: NextRequest | Request) {
+    const session = await getBackendSession(req);
+    if (!session?.user) return false;
+    return session.user.role === "ADMIN" || Boolean(session.user.invoiceAccess);
 }

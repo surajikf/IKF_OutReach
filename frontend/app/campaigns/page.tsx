@@ -38,6 +38,7 @@ import { wrapInEmailTemplate } from "@/shared/lib/email-template";
 import { normalizeEmailBodyHtml } from "@/shared/lib/email-format";
 import { sanitizeEmailHtml } from "@/shared/lib/email-sanitize";
 import { apiPath } from "@/frontend/lib/app-path";
+import { readCampaignSession, writeCampaignSession } from "@/frontend/lib/campaign-session";
 
 const campaignTypes = [
     { id: "Broadcast", name: "Broadcast", desc: "Send one clear update to many clients.", icon: Radio, target: "Active & Warm Leads", bestFor: "News, updates, and announcements." },
@@ -58,22 +59,22 @@ const audienceSourceOptions: Array<{
     {
         id: "INVOICE_SYSTEM",
         name: "Invoice",
-        desc: "Best when you want service and invoice data.",
-        note: "Service filters work here.",
+        desc: "Use contacts from invoice records.",
+        note: "Includes invoice history and service data. Best for service-based campaigns.",
         icon: Database,
     },
     {
         id: "ZOHO_BIGIN",
         name: "Zoho Bigin",
-        desc: "Use CRM contacts and stages.",
-        note: "No service filters.",
+        desc: "Use contacts from Zoho CRM.",
+        note: "Uses CRM fields and stages only. No invoice/service history.",
         icon: Building2,
     },
     {
         id: "GMAIL",
         name: "Gmail",
-        desc: "Use synced Gmail contacts.",
-        note: "No invoice or service data.",
+        desc: "Use contacts synced from Gmail.",
+        note: "Email-contact based targeting only. No invoice/service history.",
         icon: Mail,
     },
 ];
@@ -156,7 +157,7 @@ const smartContentGuide: Record<AudienceSource, Record<string, { subject: string
 // Resonance tuning removed; tone is now inferred from the master draft.
 
 export default function CampaignGenerator() {
-    const [audienceSource, setAudienceSource] = useState<AudienceSource | null>(null);
+    const [audienceSources, setAudienceSources] = useState<AudienceSource[]>(["INVOICE_SYSTEM"]);
     const [selectedType, setSelectedType] = useState<string | null>(null);
     const [topic, setTopic] = useState("");
     const [coreMessage, setCoreMessage] = useState("");
@@ -183,6 +184,7 @@ export default function CampaignGenerator() {
     const [targetClients, setTargetClients] = useState<any[]>([]);
     const [loadingTargetClients, setLoadingTargetClients] = useState(false);
     const [showClientPicker, setShowClientPicker] = useState(false);
+    const [currentAudienceClientIds, setCurrentAudienceClientIds] = useState<string[]>([]);
     
     // Audience Oversight State
     const [excludedClientIds, setExcludedClientIds] = useState<string[]>([]);
@@ -202,6 +204,9 @@ export default function CampaignGenerator() {
         learnedPatterns?: string[];
     }>({});
 
+    const hasInvoiceSelected = audienceSources.includes("INVOICE_SYSTEM");
+    const primarySource = audienceSources[0] || "INVOICE_SYSTEM";
+
     const toggleExclusion = (id: string) => {
         setExcludedClientIds(prev => 
             prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -211,6 +216,7 @@ export default function CampaignGenerator() {
     // Test Email State
     const [testEmail, setTestEmail] = useState("");
     const [isSendingTest, setIsSendingTest] = useState(false);
+    const [sessionHydrated, setSessionHydrated] = useState(false);
 
     // Draft persistence
     const [draftRestored, setDraftRestored] = useState(false);
@@ -275,6 +281,48 @@ export default function CampaignGenerator() {
     }, [draftContext, editedSubject, editedBody, selectedType, topic, cta, sampleData, pendingDraft, hasEditedSinceLoad]);
 
     useEffect(() => {
+        const saved = readCampaignSession();
+        if (saved) {
+            const restoredSources = Array.isArray(saved.audienceSources)
+                ? saved.audienceSources.filter((s): s is AudienceSource => ["INVOICE_SYSTEM", "ZOHO_BIGIN", "GMAIL"].includes(s))
+                : [];
+            if (restoredSources.length > 0) setAudienceSources(restoredSources);
+            if (typeof saved.selectedType === "string") setSelectedType(saved.selectedType);
+            if (typeof saved.topic === "string") setTopic(saved.topic);
+            if (typeof saved.coreMessage === "string") setCoreMessage(saved.coreMessage);
+            if (typeof saved.cta === "string") setCta(saved.cta);
+            if (Array.isArray(saved.selectedServices)) setSelectedServices(saved.selectedServices);
+            if (saved.serviceLogic === "AND" || saved.serviceLogic === "OR") setServiceLogic(saved.serviceLogic);
+            if (Array.isArray(saved.excludedClientIds)) setExcludedClientIds(saved.excludedClientIds);
+        }
+        setSessionHydrated(true);
+    }, []);
+
+    useEffect(() => {
+        if (!sessionHydrated) return;
+        writeCampaignSession({
+            audienceSources,
+            selectedType,
+            topic,
+            coreMessage,
+            cta,
+            selectedServices,
+            serviceLogic,
+            excludedClientIds,
+        });
+    }, [
+        sessionHydrated,
+        audienceSources,
+        selectedType,
+        topic,
+        coreMessage,
+        cta,
+        selectedServices,
+        serviceLogic,
+        excludedClientIds,
+    ]);
+
+    useEffect(() => {
         fetch(apiPath("/services"))
             .then(async (res) => {
                 const contentType = res.headers.get("content-type") || "";
@@ -300,22 +348,23 @@ export default function CampaignGenerator() {
     }, []);
 
     useEffect(() => {
-        if (!audienceSource || !selectedType) {
+        if (audienceSources.length === 0 || !selectedType) {
             setAudienceData({ count: 0, industries: [] });
+            setCurrentAudienceClientIds([]);
             return;
         }
         setLoadingAudience(true);
 
         fetch(apiPath("/campaigns/estimate"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                audienceSource,
-                type: selectedType,
-                serviceFilters: selectedServices,
-                serviceLogic,
-                excludedClientIds
-            })
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    audienceSources,
+                    type: selectedType,
+                    serviceFilters: selectedServices,
+                    serviceLogic,
+                    excludedClientIds
+                })
         })
             .then(async res => {
                 const contentType = res.headers.get("content-type");
@@ -340,7 +389,43 @@ export default function CampaignGenerator() {
                 setAudienceData({ count: 0, industries: [] });
             })
             .finally(() => setLoadingAudience(false));
-    }, [audienceSource, selectedType, selectedServices, serviceLogic, excludedClientIds]);
+    }, [audienceSources, selectedType, selectedServices, serviceLogic, excludedClientIds]);
+
+    useEffect(() => {
+        if (audienceSources.length === 0 || !selectedType) {
+            setCurrentAudienceClientIds([]);
+            return;
+        }
+
+        let cancelled = false;
+        fetch(apiPath("/campaigns/target-clients"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                audienceSources,
+                type: selectedType,
+                serviceFilters: selectedServices,
+                serviceLogic,
+                includeExclusions: true,
+            }),
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                if (cancelled) return;
+                if (data?.success && Array.isArray(data.data)) {
+                    setCurrentAudienceClientIds(data.data.map((c: any) => c.id).filter(Boolean));
+                } else {
+                    setCurrentAudienceClientIds([]);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setCurrentAudienceClientIds([]);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [audienceSources, selectedType, selectedServices, serviceLogic]);
 
     // Segmentation is Cross-Sell-only.
     // Clear service filters whenever the objective changes away from Cross-Sell
@@ -353,32 +438,35 @@ export default function CampaignGenerator() {
     }, [selectedType]);
 
     useEffect(() => {
-        if (!audienceSource) return;
+        if (!sessionHydrated) return;
+        if (audienceSources.length === 0) return;
         // reset objective-specific state when source changes
         setSelectedType((prev) => {
-            if (!prev) return recommendedObjectiveBySource[audienceSource];
-            if (prev === "Cross-Sell" && audienceSource !== "INVOICE_SYSTEM") {
-                toast.info("Cross-Sell with service filters needs Invoice source. Switched objective.");
-                return recommendedObjectiveBySource[audienceSource];
+            if (!prev) return recommendedObjectiveBySource[primarySource];
+            if (prev === "Cross-Sell" && !hasInvoiceSelected) {
+                toast.info("Cross-Sell needs Invoice source. Switched objective.");
+                return recommendedObjectiveBySource[primarySource];
             }
-            if (prev === "Reactivation" && audienceSource !== "INVOICE_SYSTEM") {
+            if (prev === "Reactivation" && !hasInvoiceSelected) {
                 toast.info("Reactivation is available only with Invoice source. Switched objective.");
-                return recommendedObjectiveBySource[audienceSource];
+                return recommendedObjectiveBySource[primarySource];
             }
             return prev;
         });
-        setSelectedServices([]);
-        setServiceLogic("OR");
+        if (!hasInvoiceSelected) {
+            setSelectedServices([]);
+            setServiceLogic("OR");
+        }
         setExcludedClientIds([]);
         setAudienceData({ count: 0, industries: [] });
         setIsReviewing(false);
         setSampleData(null);
         setEditedSubject("");
         setEditedBody("");
-    }, [audienceSource]);
+    }, [audienceSources, hasInvoiceSelected, primarySource, sessionHydrated]);
 
     const handleGenerateSample = async (clientId?: string) => {
-        if (!audienceSource || !selectedType || !topic || !coreMessage) {
+        if (audienceSources.length === 0 || !selectedType || !topic || !coreMessage) {
             toast.error("Pick a source, objective, subject, and body.");
             return;
         }
@@ -407,7 +495,7 @@ export default function CampaignGenerator() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ 
-                    audienceSource,
+                    audienceSources,
                     type: selectedType, 
                     topic, 
                     coreMessage, 
@@ -445,7 +533,7 @@ export default function CampaignGenerator() {
     };
 
     const fetchTargetClients = async () => {
-        if (!audienceSource || !selectedType) {
+        if (audienceSources.length === 0 || !selectedType) {
             toast.error("Select audience source and objective first.");
             return;
         }
@@ -455,7 +543,7 @@ export default function CampaignGenerator() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    audienceSource,
+                    audienceSources,
                     type: selectedType || "",
                     serviceFilters: selectedServices,
                     serviceLogic,
@@ -519,7 +607,7 @@ export default function CampaignGenerator() {
 
     const handleGenerateAll = async () => {
         const plain = editedBody.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-        if (!audienceSource) {
+        if (audienceSources.length === 0) {
             toast.error("Select audience source first.");
             return;
         }
@@ -552,6 +640,18 @@ export default function CampaignGenerator() {
             return;
         }
 
+        const currentSampleClientId =
+            sampleData?.clientId ||
+            sampleData?.client?.id ||
+            sampleData?.client?.clientId ||
+            null;
+        const finalExcludedIds = Array.from(
+            new Set(
+                [...excludedClientIds, currentSampleClientId]
+                    .filter((id): id is string => typeof id === "string" && id.length > 0)
+            )
+        );
+
         setIsGenerating(true);
         try {
             setTerminalStep(3);
@@ -562,7 +662,7 @@ export default function CampaignGenerator() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ 
-                    audienceSource,
+                    audienceSources,
                     type: selectedType, 
                     topic, 
                     coreMessage, 
@@ -571,13 +671,14 @@ export default function CampaignGenerator() {
                     styleMemory: nextStyleMemory,
                     serviceFilters: selectedServices,
                     serviceLogic: serviceLogic,
-                    excludedClientIds: [...excludedClientIds, sampleData?.clientId].filter(Boolean),
+                    excludedClientIds: finalExcludedIds,
                 }),
             });
 
             const data = await res.json().catch(() => null);
             if (res.ok && data?.success) {
                 const jobId = data?.data?.jobId as string | undefined;
+                writeCampaignSession({ activeJobId: jobId || null });
                 window.location.href = jobId
                     ? `/campaigns/results?jobId=${encodeURIComponent(jobId)}`
                     : "/campaigns/results";
@@ -778,7 +879,7 @@ export default function CampaignGenerator() {
                                             )}
                                         </div>
                                         {pendingDraft && (
-                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-[10px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg uppercase tracking-widest">
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs font-medium text-amber-900 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
                                                 <span>Draft found for this sample. Restore it?</span>
                                                 <div className="flex gap-2">
                                                     <button
@@ -811,12 +912,12 @@ export default function CampaignGenerator() {
                                             </div>
                                         )}
                                         {draftRestored && !pendingDraft && (
-                                            <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-3 py-2 rounded-lg uppercase tracking-widest">
-                                                Draft restored and autosaving
+                                            <div className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 px-3 py-2 rounded-lg">
+                                                Draft restored. Auto-save is on.
                                             </div>
                                         )}
                                         <div className="space-y-1.5 min-h-[600px]">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Email Body (Rich Text control)</label>
+                                            <label className="text-xs font-semibold text-slate-500 tracking-wide pl-1">Email Body</label>
                                             <RichTextEditor 
                                                 content={editedBody} 
                                                 onChange={(v) => { setEditedBody(v); setHasEditedSinceLoad(true); }}
@@ -829,8 +930,8 @@ export default function CampaignGenerator() {
                                     <div className="space-y-6">
                                         <div className="pb-4 border-b border-slate-100">
                                             <div className="flex items-center justify-between mb-1.5">
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subject</p>
-                                                <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-600">
+                                                <p className="text-xs font-semibold text-slate-500 tracking-wide">Subject</p>
+                                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-600">
                                                     Standard
                                                 </span>
                                             </div>
@@ -848,9 +949,9 @@ export default function CampaignGenerator() {
                                                 <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center">
                                                     <User className="w-4 h-4" />
                                                 </div>
-                                                <div className="text-[10px] font-bold uppercase tracking-widest leading-tight">
-                                                    Professional Display Rendered<br/>
-                                                    <span className="text-blue-500/60 lowercase italic">Ready for deployment</span>
+                                                <div className="text-xs font-medium leading-tight text-slate-500">
+                                                    Professional preview<br/>
+                                                    <span className="text-blue-500/70 italic">Ready to send</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -867,7 +968,7 @@ export default function CampaignGenerator() {
                                     {(sampleData.clientName || sampleData.email || "C")[0]}
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-xs font-black text-slate-400 uppercase tracking-tighter">Current Sample</p>
+                                    <p className="text-xs font-semibold text-slate-500 tracking-wide">Current Sample</p>
                                     <p
                                         className="text-sm font-bold text-slate-900 truncate max-w-[180px]"
                                         title={`${sampleData.clientName || sampleData.email || "Selected Client"}${sampleData.email ? `\n${sampleData.email}` : ""}`}
@@ -876,7 +977,7 @@ export default function CampaignGenerator() {
                                     </p>
                                     {sampleData.email && (
                                         <p
-                                            className="text-[10px] font-medium text-slate-400 truncate max-w-[180px]"
+                                            className="text-xs font-medium text-slate-400 truncate max-w-[180px]"
                                             title={sampleData.email}
                                         >
                                             {sampleData.email}
@@ -885,7 +986,7 @@ export default function CampaignGenerator() {
                                 </div>
                                 <button
                                     onClick={fetchTargetClients}
-                                    className="ml-auto text-[10px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded border border-blue-100 transition-colors"
+                                    className="ml-auto text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-100 transition-colors"
                                 >
                                     {loadingTargetClients ? "Loading..." : "Change"}
                                 </button>
@@ -903,7 +1004,7 @@ export default function CampaignGenerator() {
 
                             
                             <div className="pt-6 border-t border-slate-100 space-y-4">
-                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Send Test Email</h4>
+                                <h4 className="text-xs font-semibold text-slate-500 tracking-wide">Send Test Email</h4>
                                 <div className="space-y-2">
                                     <input
                                         type="email"
@@ -915,7 +1016,7 @@ export default function CampaignGenerator() {
                                     <button
                                         onClick={handleSendTestEmail}
                                         disabled={isSendingTest || !testEmail}
-                                        className="w-full py-2.5 bg-white border-2 border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-600 hover:border-blue-500 hover:text-blue-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                                        className="w-full py-2.5 bg-white border-2 border-slate-200 rounded-lg text-sm font-semibold text-slate-600 hover:border-blue-500 hover:text-blue-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                                     >
                                         {isSendingTest ? <RefreshCcw className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
                                         Send Test Email
@@ -926,12 +1027,12 @@ export default function CampaignGenerator() {
                             <div className="pt-6">
                                 <button
                                     onClick={handleGenerateAll}
-                                    className="w-full bg-slate-900 text-white py-4 px-4 rounded-xl text-sm font-black hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg group"
+                                    className="w-full bg-slate-900 text-white py-4 px-4 rounded-xl text-sm font-semibold hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg group"
                                 >
                                     Generate All
                                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                                 </button>
-                                <p className="text-[10px] text-center text-slate-400 mt-4 font-bold uppercase tracking-widest">
+                                <p className="text-xs text-center text-slate-500 mt-4 font-medium">
                                     This will create emails for {audienceData.count - 1} other clients.
                                 </p>
                             </div>
@@ -949,20 +1050,33 @@ export default function CampaignGenerator() {
         );
     }
 
-    const sourceLabel = audienceSourceOptions.find((s) => s.id === audienceSource)?.name || null;
+    const sourceLabel = audienceSources
+        .map((id) => audienceSourceOptions.find((s) => s.id === id)?.name)
+        .filter(Boolean)
+        .join(" + ") || null;
     const activeGuide =
-        audienceSource && selectedType
-            ? smartContentGuide[audienceSource]?.[selectedType]
+        audienceSources.length > 0 && selectedType
+            ? smartContentGuide[primarySource]?.[selectedType]
             : null;
-    const isReady = !!(audienceSource && selectedType && topic.trim() && coreMessage.trim() && cta.trim());
+    const isReady = !!(audienceSources.length > 0 && selectedType && topic.trim() && coreMessage.trim() && cta.trim());
     const readinessChecks = [
-        { label: "Audience source", done: !!audienceSource },
+        { label: "Audience source", done: audienceSources.length > 0 },
         { label: "Objective", done: !!selectedType },
         { label: "Master subject", done: topic.trim().length > 0 },
         { label: "Master body", done: coreMessage.trim().length > 0 },
         { label: "CTA", done: cta.trim().length > 0 },
     ];
     const missingLabels = readinessChecks.filter((item) => !item.done).map((item) => item.label);
+    const excludedCurrentAudienceCount = currentAudienceClientIds.filter((id) => excludedClientIds.includes(id)).length;
+    const selectedRecipientsCount = Math.max(0, currentAudienceClientIds.length - excludedCurrentAudienceCount);
+    const stepStatus = [
+        { label: "Source", done: audienceSources.length > 0 },
+        { label: "Goal", done: !!selectedType },
+        { label: "Audience", done: audienceData.count > 0 },
+        { label: "Message", done: topic.trim().length > 0 && coreMessage.trim().length > 0 },
+        { label: "Draft", done: isReviewing },
+    ];
+    const currentStep = Math.min(stepStatus.filter((s) => s.done).length + 1, stepStatus.length);
 
     const toggleService = (serviceName: string) => {
         setSelectedServices(prev => 
@@ -972,11 +1086,50 @@ export default function CampaignGenerator() {
         );
     };
 
+    const toggleAudienceSource = (source: AudienceSource) => {
+        setAudienceSources((prev) => {
+            if (source === "INVOICE_SYSTEM") {
+                if (!prev.includes("INVOICE_SYSTEM")) {
+                    return ["INVOICE_SYSTEM", ...prev];
+                }
+                // Allow unselecting Invoice if at least one other source is selected.
+                const next = prev.filter((item) => item !== "INVOICE_SYSTEM");
+                return next.length > 0 ? next : ["INVOICE_SYSTEM"];
+            }
+            const hasSource = prev.includes(source);
+            if (hasSource) {
+                const next = prev.filter((item) => item !== source);
+                return next.length > 0 ? next : ["INVOICE_SYSTEM"];
+            }
+            return [...prev, source];
+        });
+    };
+
     return (
         <div className="w-full pb-20 px-3 sm:px-4 lg:px-6">
             <div className="mb-8 px-2 md:px-0">
                 <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Campaign Builder</h2>
                 <p className="text-sm font-medium text-slate-500 mt-1">Choose options and generate your campaign.</p>
+                <div className="mt-4 bg-white border border-slate-200 rounded-lg px-4 py-3">
+                    <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-slate-600">Step {currentStep} of {stepStatus.length}</p>
+                        <p className="text-xs text-slate-500">
+                            {missingLabels.length > 0 ? `Pending: ${missingLabels.join(", ")}` : "All set"}
+                        </p>
+                    </div>
+                    <div className="mt-2 grid grid-cols-5 gap-2">
+                        {stepStatus.map((step) => (
+                            <div
+                                key={step.label}
+                                className={cn(
+                                    "h-1.5 rounded-full",
+                                    step.done ? "bg-blue-600" : "bg-slate-200"
+                                )}
+                                title={step.label}
+                            />
+                        ))}
+                    </div>
+                </div>
             </div>
 
             <div className="flex flex-col lg:flex-row gap-8 items-start">
@@ -990,20 +1143,20 @@ export default function CampaignGenerator() {
                                 <button
                                     key={source.id}
                                     type="button"
-                                    onClick={() => setAudienceSource(source.id)}
+                                    onClick={() => toggleAudienceSource(source.id)}
                                     className={cn(
                                         "text-left p-5 rounded-lg border transition-all",
-                                        audienceSource === source.id
+                                        audienceSources.includes(source.id)
                                             ? "bg-blue-50/60 border-blue-500 ring-1 ring-blue-500"
                                             : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                                     )}
                                 >
                                     <div className="flex items-start justify-between mb-2">
                                         <div className="flex items-center gap-3">
-                                            <source.icon className={cn("w-5 h-5", audienceSource === source.id ? "text-blue-600" : "text-slate-400")} />
+                                            <source.icon className={cn("w-5 h-5", audienceSources.includes(source.id) ? "text-blue-600" : "text-slate-400")} />
                                             <h4 className="text-sm font-semibold text-slate-900">{source.name}</h4>
                                         </div>
-                                        {audienceSource === source.id && <CheckCircle2 className="w-5 h-5 text-blue-600" />}
+                                        {audienceSources.includes(source.id) && <CheckCircle2 className="w-5 h-5 text-blue-600" />}
                                     </div>
                                     <p className="text-xs text-slate-500 leading-relaxed">{source.desc}</p>
                                     <p className="text-[10px] font-bold text-blue-600/90 uppercase tracking-wider mt-3">{source.note}</p>
@@ -1015,11 +1168,14 @@ export default function CampaignGenerator() {
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                             <h3 className="text-base font-semibold text-slate-900">1. Select Goal</h3>
+                            <p className="text-xs text-slate-500 mt-1">
+                                Source = where contacts come from. Goal = how you want to message them.
+                            </p>
                         </div>
-                        <div className={cn("p-6 grid grid-cols-1 md:grid-cols-2 gap-4", !audienceSource && "opacity-50 pointer-events-none select-none")}>
+                        <div className={cn("p-6 grid grid-cols-1 md:grid-cols-2 gap-4", audienceSources.length === 0 && "opacity-50 pointer-events-none select-none")}>
                             {campaignTypes
-                                .filter((type) => !(type.id === "Reactivation" && audienceSource !== "INVOICE_SYSTEM"))
-                                .filter((type) => !(type.id === "Cross-Sell" && audienceSource !== "INVOICE_SYSTEM"))
+                                .filter((type) => !(type.id === "Reactivation" && !hasInvoiceSelected))
+                                .filter((type) => !(type.id === "Cross-Sell" && !hasInvoiceSelected))
                                 .map((type) => (
                                 (() => {
                                     return (
@@ -1062,7 +1218,7 @@ export default function CampaignGenerator() {
                         </div>
 
                         {/* Ultra-Smart Segmentation */}
-                        {selectedType === "Cross-Sell" && audienceSource === "INVOICE_SYSTEM" && (
+                        {selectedType === "Cross-Sell" && hasInvoiceSelected && (
                             <div className="px-6 pb-6 pt-2 border-t border-slate-100">
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
@@ -1142,7 +1298,7 @@ export default function CampaignGenerator() {
                                 </div>
                             </div>
                         )}
-                        {selectedType === "Cross-Sell" && audienceSource && audienceSource !== "INVOICE_SYSTEM" && (
+                        {selectedType === "Cross-Sell" && !hasInvoiceSelected && (
                             <div className="px-6 pb-6 pt-2 border-t border-slate-100">
                                 <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-xs font-medium">
                                     Service filters work only with Invoice source.
@@ -1155,7 +1311,7 @@ export default function CampaignGenerator() {
                         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                             <h3 className="text-base font-semibold text-slate-900">2. Sample Email</h3>
                         </div>
-                        <div className={cn("p-6 space-y-6", !audienceSource && "opacity-50 pointer-events-none select-none")}>
+                        <div className={cn("p-6 space-y-6", audienceSources.length === 0 && "opacity-50 pointer-events-none select-none")}>
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium text-slate-700">Master Subject Line</label>
                                 <input
@@ -1209,14 +1365,19 @@ export default function CampaignGenerator() {
                                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Audience Size</p>
                                     <div className="flex items-end gap-3">
                                         <span className="text-4xl font-semibold tracking-tight text-slate-900">
-                                            {!audienceSource || !selectedType ? "-" : loadingAudience ? <RefreshCw className="w-6 h-6 animate-spin text-slate-300 mb-1" /> : audienceData.count}
+                                            {audienceSources.length === 0 || !selectedType ? "-" : loadingAudience ? <RefreshCw className="w-6 h-6 animate-spin text-slate-300 mb-1" /> : audienceData.count}
                                         </span>
-                                        {audienceSource && selectedType && !loadingAudience && (
+                                        {audienceSources.length > 0 && selectedType && !loadingAudience && (
                                             <span className="text-sm font-medium text-slate-500 mb-1.5">{selectedType} Campaign</span>
                                         )}
                                     </div>
+                                    {audienceSources.length > 0 && selectedType && !loadingAudience && audienceData.count > 0 && (
+                                        <p className="mt-2 text-xs text-slate-600">
+                                            Selected recipients: <span className="font-semibold">{selectedRecipientsCount}</span> of <span className="font-semibold">{audienceData.count}</span>
+                                        </p>
+                                    )}
                                 </div>
-                                {audienceSource && selectedType && audienceData.count > 0 && (
+                                {audienceSources.length > 0 && selectedType && audienceData.count > 0 && (
                                     <button 
                                         onClick={async () => {
                                             setLoadingTargetClients(true);
@@ -1226,7 +1387,7 @@ export default function CampaignGenerator() {
                                                     method: "POST",
                                                     headers: { "Content-Type": "application/json" },
                                                     body: JSON.stringify({
-                                                        audienceSource,
+                                                        audienceSources,
                                                         type: selectedType || "",
                                                         serviceFilters: selectedServices,
                                                         serviceLogic,
@@ -1250,7 +1411,7 @@ export default function CampaignGenerator() {
                                 )}
                             </div>
 
-                            {audienceSource && selectedType && audienceData.industries.length > 0 && (
+                            {audienceSources.length > 0 && selectedType && audienceData.industries.length > 0 && (
                                 <div className="pt-4 border-t border-slate-100">
                                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Industries</p>
                                     <div className="flex flex-wrap gap-2">
@@ -1327,7 +1488,7 @@ export default function CampaignGenerator() {
                 clients={targetClients}
                 loading={loadingTargetClients}
                 mode="oversight"
-                showActivityFilters={audienceSource === "INVOICE_SYSTEM"}
+                showActivityFilters={hasInvoiceSelected}
                 excludedIds={excludedClientIds}
                 onToggleExclusion={toggleExclusion}
                 onSetExcludedIds={setExcludedClientIds}

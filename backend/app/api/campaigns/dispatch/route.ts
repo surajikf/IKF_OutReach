@@ -1,5 +1,5 @@
 import prisma from "@/backend/lib/prisma";
-import { sendStrategicEmail } from "@/backend/lib/mail";
+import { createStrategicGmailDraft, sendStrategicEmail } from "@/backend/lib/mail";
 import { wrapInEmailTemplate } from "@/shared/lib/email-template";
 import { ok, error } from "@/backend/lib/api-response";
 import { replaceVariables } from "@/shared/lib/utils";
@@ -7,13 +7,20 @@ import { z } from "zod";
 import { normalizeEmailBodyHtml } from "@/shared/lib/email-format";
 import { sanitizeEmailHtml } from "@/shared/lib/email-sanitize";
 import { parseCampaignGeneratedOutput } from "@/shared/lib/campaign-output";
+import { getBackendSession } from "@/backend/lib/auth";
 
 const dispatchSchema = z.object({
     campaignId: z.string().min(1, "Campaign ID is required"),
+    dispatchMode: z.enum(["SEND", "DRAFT"]).optional().default("SEND"),
 });
 
 export async function POST(request: Request) {
     try {
+        const session = await getBackendSession(request);
+        if (!session?.user?.id) {
+            return error("UNAUTHORIZED", "Sign in required.", { status: 401 });
+        }
+
         const json = await request.json();
         const parsed = dispatchSchema.safeParse(json);
 
@@ -24,7 +31,7 @@ export async function POST(request: Request) {
             });
         }
 
-        const { campaignId } = parsed.data;
+        const { campaignId, dispatchMode } = parsed.data;
 
         // 1. Fetch Campaign Details
         const campaign = await prisma.campaignHistory.findUnique({
@@ -59,12 +66,19 @@ export async function POST(request: Request) {
         const synchronizedBody = replaceVariables(normalizedBody, campaign.client);
         const htmlBody = wrapInEmailTemplate("standard", synchronizedBody, campaign.client.clientName);
 
-        const result = await sendStrategicEmail({
-            to: campaign.client.email,
-            subject: subject,
-            html: htmlBody,
-            text: body.replace(/<[^>]*>/g, ""),
-        });
+        const result = dispatchMode === "DRAFT"
+            ? await createStrategicGmailDraft({
+                to: campaign.client.email,
+                subject: subject,
+                html: htmlBody,
+                text: body.replace(/<[^>]*>/g, ""),
+            }, { userId: session.user.id })
+            : await sendStrategicEmail({
+                to: campaign.client.email,
+                subject: subject,
+                html: htmlBody,
+                text: body.replace(/<[^>]*>/g, ""),
+            }, { userId: session.user.id });
 
         if (!result.success) {
             return error("INTEGRATION_ERROR", result.error || "Neural Link Failure.", {
@@ -73,7 +87,9 @@ export async function POST(request: Request) {
         }
 
         return ok({
+            mode: dispatchMode,
             messageId: result.messageId,
+            draftId: (result as any).draftId || null,
             recipient: campaign.client.clientName,
         });
     } catch (err: any) {

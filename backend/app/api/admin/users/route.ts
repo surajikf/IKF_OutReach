@@ -10,6 +10,16 @@ export async function GET(req: Request) {
         }
 
         const users = await prisma.user.findMany({
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+                status: true,
+                canAccessInvoiceData: true,
+                createdAt: true,
+                updatedAt: true,
+            },
             orderBy: { createdAt: "desc" },
         });
 
@@ -51,11 +61,24 @@ export async function PUT(req: Request) {
             case "BAN":
                 updateData.status = "BANNED";
                 break;
+            case "UNBAN":
+                updateData.status = "APPROVED";
+                break;
             case "MAKE_ADMIN":
                 updateData.role = "ADMIN";
+                updateData.canAccessInvoiceData = true;
                 break;
             case "REVOKE_ADMIN":
                 updateData.role = "USER";
+                break;
+            case "GRANT_INVOICE_ACCESS":
+                updateData.canAccessInvoiceData = true;
+                break;
+            case "REVOKE_INVOICE_ACCESS":
+                if (target.email === "suraj.sonnar@ikf.co.in") {
+                    return error("BAD_REQUEST", "Cannot revoke invoice access from the primary administrator.");
+                }
+                updateData.canAccessInvoiceData = false;
                 break;
             case "DELETE_USER":
                 await prisma.user.delete({ where: { id: userId } });

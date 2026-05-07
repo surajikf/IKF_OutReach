@@ -28,16 +28,15 @@ async function ensurePrismaUserFromSession(user: { id: string, email: string, ro
       where: { id: user.id },
       update: {
         role: role === "ADMIN" ? "ADMIN" : "USER",
-        status: "APPROVED",
       },
-      create: {
-        id: id,
-        email: email || `unknown+${id}@local`,
-        name: null,
-        role: role === "ADMIN" ? "ADMIN" : "USER",
-        status: "APPROVED",
-      },
-    });
+        create: {
+          id: id,
+          email: email || `unknown+${id}@local`,
+          name: null,
+          role: role === "ADMIN" ? "ADMIN" : "USER",
+          status: "PENDING",
+        },
+      });
   } catch (err: any) {
     // P2002: Unique constraint failed (email). Keep the FK row alive by ensuring an id row exists.
     if (err?.code === "P2002") {
@@ -45,14 +44,13 @@ async function ensurePrismaUserFromSession(user: { id: string, email: string, ro
         where: { id: id },
         update: {
           role: role === "ADMIN" ? "ADMIN" : "USER",
-          status: "APPROVED",
         },
         create: {
           id: id,
           email: `unknown+${id}@local`,
           name: null,
           role: role === "ADMIN" ? "ADMIN" : "USER",
-          status: "APPROVED",
+          status: "PENDING",
         },
       });
       return;
@@ -191,4 +189,3 @@ export async function DELETE(
     return error("INTERNAL_ERROR", "Failed to delete draft.");
   }
 }
-

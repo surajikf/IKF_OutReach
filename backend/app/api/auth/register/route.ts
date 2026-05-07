@@ -11,15 +11,13 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
 
-        // No restricted registration - open to all users
-
-
         const supabase = await createClient();
 
         // 1. Sign up user in Supabase Auth (only primary email allowed above)
         const isSuperAdmin = isPrimaryAdminEmail(email);
         const role = isSuperAdmin ? "ADMIN" : "USER";
-        const status = "APPROVED"; // Everyone is pre-authorized
+        const status = isSuperAdmin ? "APPROVED" : "PENDING";
+        const canAccessInvoiceData = isSuperAdmin;
 
         let supabaseUserId;
 
@@ -31,6 +29,7 @@ export async function POST(req: Request) {
                     full_name: name,
                     role: role,
                     status: status,
+                    invoiceAccess: canAccessInvoiceData,
                 },
             },
         });
@@ -66,6 +65,9 @@ export async function POST(req: Request) {
             update: {
                 id: supabaseUserId,
                 name,
+                role,
+                status,
+                canAccessInvoiceData,
             },
             create: {
                 id: supabaseUserId,
@@ -73,13 +75,20 @@ export async function POST(req: Request) {
                 email,
                 role,
                 status,
+                canAccessInvoiceData,
             },
         });
 
         return NextResponse.json(
             { 
                 message: "Neural profile synced successfully.", 
-                user: { id: user.id, email: user.email, role: user.role, status: user.status },
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    role: user.role,
+                    status: user.status,
+                    canAccessInvoiceData: user.canAccessInvoiceData,
+                },
             },
             { status: 201 }
         );

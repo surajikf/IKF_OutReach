@@ -11,7 +11,7 @@ import { IdentitySync } from "./Auth/IdentitySync";
 export function ClientWrapper({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const { projectName } = useBranding();
-    const isAuthPage = ["/login", "/register", "/banned"].includes(pathname);
+    const isAuthPage = ["/login", "/register", "/banned", "/pending-approval"].includes(pathname);
     const isDashboard = pathname === "/";
     const [isNavigating, setIsNavigating] = useState(false);
 
@@ -19,6 +19,7 @@ export function ClientWrapper({ children }: { children: React.ReactNode }) {
         const titleSuffix = pathname === "/" ? "Dashboard" : 
                            pathname === "/login" ? "Security Clearance" :
                            pathname === "/register" ? "Identity Registration" :
+                           pathname === "/pending-approval" ? "Approval Pending" :
                            pathname.split("/").filter(Boolean).slice(-1)[0] || "Home";
         
         const brand = projectName || "IKF Outreach";

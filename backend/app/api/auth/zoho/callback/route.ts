@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/backend/lib/prisma";
 import crypto from "crypto";
+import { getBackendSession } from "@/backend/lib/auth";
 
 const RAW_ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "default_insecure_key_123456789012";
 const ENCRYPTION_KEY = RAW_ENCRYPTION_KEY.padEnd(32, '0').substring(0, 32);
@@ -31,6 +32,11 @@ function encrypt(text: string): string {
 
 export async function GET(req: Request) {
     try {
+        const session = await getBackendSession(req);
+        if (!session?.user?.id) {
+            return NextResponse.redirect(`${process.env.NEXTAUTH_URL || "http://localhost:3000"}/login?auth=expired`);
+        }
+
         const { searchParams } = new URL(req.url);
         const code = searchParams.get("code");
         const errorParam = searchParams.get("error");
@@ -75,14 +81,20 @@ export async function GET(req: Request) {
 
         console.log("[ZOHO_CALLBACK] Granted Scopes:", tokenData.scope);
 
-        // We specifically care about the refresh_token so we can keep the session alive indefinitely
+        // Store refresh token scoped to the current user
         if (tokenData.refresh_token) {
-            await prisma.$executeRawUnsafe(
-                `UPDATE "GlobalSettings" SET "zohoRefreshTokenEncrypted" = $1, "zohoGrantedScopes" = $2 WHERE id = $3`,
-                encrypt(tokenData.refresh_token),
-                tokenData.scope || null,
-                settings.id
-            );
+            await prisma.zohoConnection.upsert({
+                where: { userId: session.user.id },
+                update: {
+                    refreshTokenEncrypted: encrypt(tokenData.refresh_token),
+                    grantedScopes: tokenData.scope || null,
+                },
+                create: {
+                    userId: session.user.id,
+                    refreshTokenEncrypted: encrypt(tokenData.refresh_token),
+                    grantedScopes: tokenData.scope || null,
+                },
+            });
         }
 
         // Redirect back to the import page on success

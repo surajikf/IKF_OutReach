@@ -5,7 +5,7 @@ import prisma from "@/backend/lib/prisma";
 export async function GET() {
     try {
         const settings = await getGlobalSettings();
-        const apiKey = settings.brevoApiKey;
+        const apiKey = process.env.BREVO_API_KEY?.trim() || "";
 
         if (!apiKey) {
             return error("VALIDATION_ERROR", "Brevo API Key not configured in .env or Settings.");

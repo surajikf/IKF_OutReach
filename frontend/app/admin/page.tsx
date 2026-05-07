@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useState, useEffect } from "react";
-import { ShieldAlert, CheckCircle2, Ban, Clock, ShieldHalf, ShieldCheck, Mail, User as UserIcon } from "lucide-react";
+import { ShieldAlert, CheckCircle2, Ban, Clock, ShieldHalf, Mail, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { apiPath, appPath } from "@/frontend/lib/app-path";
@@ -40,7 +40,10 @@ export default function AdminDashboard() {
         }
     };
 
-    const handleAction = async (userId: string, action: "APPROVE" | "BAN" | "MAKE_ADMIN" | "REVOKE_ADMIN") => {
+    const handleAction = async (
+        userId: string,
+        action: "APPROVE" | "BAN" | "UNBAN" | "MAKE_ADMIN" | "REVOKE_ADMIN" | "GRANT_INVOICE_ACCESS" | "REVOKE_INVOICE_ACCESS"
+    ) => {
         try {
             const res = await fetch(apiPath("/admin/users"), {
                 method: "PUT",
@@ -119,6 +122,11 @@ export default function AdminDashboard() {
                                             Standard User
                                         </span>
                                     )}
+                                    <div className="mt-2">
+                                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${userItem.canAccessInvoiceData ? "bg-blue-50 text-blue-700 border-blue-100" : "bg-slate-50 text-slate-500 border-slate-200"}`}>
+                                            Invoice: {userItem.canAccessInvoiceData ? "Enabled" : "Disabled"}
+                                        </span>
+                                    </div>
                                 </td>
                                 <td className="px-6 py-4">
                                     {userItem.status === "APPROVED" && (
@@ -141,9 +149,29 @@ export default function AdminDashboard() {
                                     <div className="flex items-center justify-end gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
                                         {userItem.email !== currentUser?.email && (
                                             <>
+                                                {userItem.status === "PENDING" && (
+                                                    <button onClick={() => handleAction(userItem.id, "APPROVE")} className="px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg transition-colors text-xs font-semibold" title="Approve User">
+                                                        Approve
+                                                    </button>
+                                                )}
+                                                {userItem.status === "BANNED" && (
+                                                    <button onClick={() => handleAction(userItem.id, "UNBAN")} className="px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg transition-colors text-xs font-semibold" title="Unban User">
+                                                        Unban
+                                                    </button>
+                                                )}
                                                 {userItem.status !== "BANNED" && (
                                                     <button onClick={() => handleAction(userItem.id, "BAN")} className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors tooltip-trigger" title="Revoke Access">
                                                         <Ban className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                {userItem.status === "APPROVED" && userItem.role !== "ADMIN" && !userItem.canAccessInvoiceData && (
+                                                    <button onClick={() => handleAction(userItem.id, "GRANT_INVOICE_ACCESS")} className="px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors text-xs font-semibold" title="Grant Invoice Access">
+                                                        Grant Invoice
+                                                    </button>
+                                                )}
+                                                {userItem.status === "APPROVED" && userItem.role !== "ADMIN" && userItem.canAccessInvoiceData && (
+                                                    <button onClick={() => handleAction(userItem.id, "REVOKE_INVOICE_ACCESS")} className="px-3 py-2 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg transition-colors text-xs font-semibold" title="Revoke Invoice Access">
+                                                        Revoke Invoice
                                                     </button>
                                                 )}
                                                 {userItem.status === "APPROVED" && userItem.role !== "ADMIN" && (

@@ -1215,7 +1215,6 @@ export default function ImportIntegrationsPage() {
                             </div>
                             <button 
                                 onClick={handleAddGmailAccount}
-                                disabled={(user as any)?.role !== "ADMIN"}
                                 className="w-full h-12 bg-slate-900 text-white rounded-2xl text-[11px] font-bold uppercase tracking-[0.2em] hover:bg-slate-800 transition-all active:scale-[0.98] shadow-lg shadow-slate-900/10 flex items-center justify-center gap-3 disabled:opacity-50"
                             >
                                 <User className="w-4 h-4" />

@@ -2,6 +2,7 @@ import prisma from "@/backend/lib/prisma";
 
 export type CampaignType = "Broadcast" | "Targeted" | "Cross-Sell" | "Reactivation" | "Reactivate" | string;
 export type AudienceSource = "INVOICE_SYSTEM" | "ZOHO_BIGIN" | "GMAIL";
+type AudienceSourceInput = AudienceSource | AudienceSource[];
 
 function getRelationshipFilterForType(type: CampaignType) {
   const normalizedType = String(type || "").toLowerCase();
@@ -44,48 +45,48 @@ function getRelationshipFilterForType(type: CampaignType) {
 }
 
 function buildAudienceWhere(
-  audienceSource: AudienceSource,
+  audienceSourceInput: AudienceSourceInput,
   type: CampaignType,
   serviceFilters: string[] = [],
   serviceLogic: "AND" | "OR" = "OR",
   excludedIds: string[] = [],
   includeExclusions = false,
 ) {
-  const clauses: any[] = [
-    { isBlocked: false },
-    { isRoleBased: false },
-    { source: audienceSource },
-  ];
+  const sources = Array.isArray(audienceSourceInput) ? audienceSourceInput : [audienceSourceInput];
+  const clauses: any[] = [{ isBlocked: false }, { isRoleBased: false }];
   const relationshipFilter = getRelationshipFilterForType(type);
 
   // Smart default: if the user hasn't selected any service segmentation,
   // target all clients regardless of relationship status.
   // Once service filters are chosen, we apply campaign-type relationship logic.
-  const hasServiceSegmentation =
+  const hasRelationshipSegmentation =
     serviceFilters.length > 0 && !serviceFilters.includes("All");
 
-  if (hasServiceSegmentation && Object.keys(relationshipFilter).length > 0) {
+  if (hasRelationshipSegmentation && Object.keys(relationshipFilter).length > 0) {
     clauses.push(relationshipFilter);
   }
 
-  if (excludedIds.length > 0 && !includeExclusions) {
-    clauses.push({ id: { notIn: excludedIds } });
-  }
+  if (excludedIds.length > 0 && !includeExclusions) clauses.push({ id: { notIn: excludedIds } });
 
-  // Ultra-Smart Multi-Service Segmentation
-  if (audienceSource === "INVOICE_SYSTEM" && serviceFilters.length > 0 && !serviceFilters.includes("All")) {
-    const serviceQueries = serviceFilters.map((service) => ({
-      invoiceServiceNames: { contains: service, mode: "insensitive" as const },
-    }));
+  const hasServiceSegmentation = sources.includes("INVOICE_SYSTEM") && serviceFilters.length > 0 && !serviceFilters.includes("All");
+  const serviceQueries = hasServiceSegmentation
+    ? serviceFilters.map((service) => ({ invoiceServiceNames: { contains: service, mode: "insensitive" as const } }))
+    : [];
 
-    clauses.push(serviceLogic === "AND" ? { AND: serviceQueries } : { OR: serviceQueries });
-  }
+  const sourceClauses = sources.map((source) => {
+    const srcClause: any[] = [{ source }];
+    if (source === "INVOICE_SYSTEM" && serviceQueries.length > 0) {
+      srcClause.push(serviceLogic === "AND" ? { AND: serviceQueries } : { OR: serviceQueries });
+    }
+    return { AND: srcClause };
+  });
 
-  return clauses.length > 0 ? { AND: clauses } : {};
+  clauses.push(sourceClauses.length === 1 ? sourceClauses[0] : { OR: sourceClauses });
+  return { AND: clauses };
 }
 
 export async function estimateCampaignAudience(
-  audienceSource: AudienceSource,
+  audienceSource: AudienceSourceInput,
   type: CampaignType,
   serviceFilters: string[] = [],
   serviceLogic: 'AND' | 'OR' = 'OR',
@@ -150,7 +151,7 @@ export async function listCampaignHistory(filter: CampaignHistoryFilter = {}) {
 }
 
 export async function getTargetClients(
-  audienceSource: AudienceSource,
+  audienceSource: AudienceSourceInput,
   type: CampaignType,
   serviceFilters: string[] = [],
   serviceLogic: 'AND' | 'OR' = 'OR',

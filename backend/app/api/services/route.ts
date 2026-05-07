@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import prisma from "@/backend/lib/prisma";
 import { ok, error } from "@/backend/lib/api-response";
+import { hasInvoiceAccess } from "@/backend/lib/auth";
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
         console.time("fetchServicesAPI");
+        const canUseInvoice = await hasInvoiceAccess(request);
         const services = await prisma.service.findMany({
             orderBy: {
                 serviceName: "asc",
@@ -13,6 +15,10 @@ export async function GET() {
         if (services.length > 0) {
             console.timeEnd("fetchServicesAPI");
             return ok(services);
+        }
+        if (!canUseInvoice) {
+            console.timeEnd("fetchServicesAPI");
+            return ok([]);
         }
 
         // Fallback: derive service list from imported client invoice services when Service table is empty.

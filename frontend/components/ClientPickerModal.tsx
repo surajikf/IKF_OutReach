@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { X, Search, Building2, User, ChevronRight, CheckCircle2, CheckSquare, EyeOff } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 
@@ -40,6 +40,12 @@ export function ClientPickerModal({
     showActivityFilters = true,
 }: ClientPickerModalProps) {
     const [searchQuery, setSearchQuery] = useState("");
+    const [pendingSelectedClientId, setPendingSelectedClientId] = useState<string>(selectedClientId || "");
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setPendingSelectedClientId(selectedClientId || "");
+    }, [isOpen, selectedClientId]);
 
     const filteredClients = useMemo(() => {
         if (!searchQuery.trim()) return clients;
@@ -72,6 +78,10 @@ export function ClientPickerModal({
     const notActiveClientIds = useMemo(() => notActiveClients.map((c) => c.id), [notActiveClients]);
 
     const selectedCount = useMemo(() => allClientIds.filter((id) => !excludedIdSet.has(id)).length, [allClientIds, excludedIdSet]);
+    const selectedFilteredCount = useMemo(
+        () => filteredClients.filter((c) => !excludedIdSet.has(c.id)).length,
+        [filteredClients, excludedIdSet]
+    );
     const selectedActiveCount = useMemo(() => activeClientIds.filter((id) => !excludedIdSet.has(id)).length, [activeClientIds, excludedIdSet]);
     const selectedNotActiveCount = useMemo(() => notActiveClientIds.filter((id) => !excludedIdSet.has(id)).length, [notActiveClientIds, excludedIdSet]);
 
@@ -108,7 +118,7 @@ export function ClientPickerModal({
                             <p className="text-sm text-slate-500 mt-0.5">
                                 {mode === "oversight"
                                     ? `${selectedCount} selected out of ${clients.length}`
-                                    : "Pick one client to preview your email"}
+                                    : "Pick one client, then click Select Client"}
                             </p>
                         </div>
                     </div>
@@ -170,11 +180,11 @@ export function ClientPickerModal({
                             </div>
                             {showActivityFilters ? (
                                 <div className="text-xs font-medium text-slate-600">
-                                    Selected {selectedCount}/{clients.length} | Active {selectedActiveCount}/{activeClients.length} | Inactive {selectedNotActiveCount}/{notActiveClients.length}
+                                    Selected {selectedCount}/{clients.length} | In view {selectedFilteredCount}/{filteredClients.length} | Active {selectedActiveCount}/{activeClients.length} | Inactive {selectedNotActiveCount}/{notActiveClients.length}
                                 </div>
                             ) : (
                                 <div className="text-xs font-medium text-slate-600">
-                                    Selected {selectedCount}/{clients.length}
+                                    Selected {selectedCount}/{clients.length} | In view {selectedFilteredCount}/{filteredClients.length}
                                 </div>
                             )}
                         </div>
@@ -198,7 +208,9 @@ export function ClientPickerModal({
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {filteredClients.map((client) => {
-                                const isSelected = selectedClientId === client.id;
+                                const isSelected = mode === "single"
+                                    ? pendingSelectedClientId === client.id
+                                    : selectedClientId === client.id;
                                 const isExcluded = excludedIds.includes(client.id);
 
                                 return (
@@ -208,7 +220,7 @@ export function ClientPickerModal({
                                             if (mode === "oversight") {
                                                 onToggleExclusion?.(client.id);
                                             } else {
-                                                onSelect(client.id);
+                                                setPendingSelectedClientId(client.id);
                                             }
                                         }}
                                         className={cn(
@@ -278,10 +290,18 @@ export function ClientPickerModal({
                 <div className="px-6 py-4 border-t border-slate-100 bg-white flex items-center justify-between">
                     <p className="text-xs font-semibold text-slate-500">Showing {filteredClients.length} of {clients.length} clients</p>
                     <button
-                        onClick={onClose}
-                        className="text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-all"
+                        onClick={() => {
+                            if (mode === "oversight") {
+                                onClose();
+                                return;
+                            }
+                            if (!pendingSelectedClientId) return;
+                            onSelect(pendingSelectedClientId);
+                        }}
+                        disabled={mode === "single" && !pendingSelectedClientId}
+                        className="text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {mode === "oversight" ? "Save and Close" : "Use This Client"}
+                        {mode === "oversight" ? "Save and Close" : "Select Client"}
                     </button>
                 </div>
             </div>

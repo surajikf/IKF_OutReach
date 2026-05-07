@@ -57,6 +57,7 @@ export async function POST(request: Request) {
             forceProvider: forcedProvider,
             disableFailover: true,
             overrideGmailAccountId: forcedProvider === "GMAIL" ? accountId : undefined,
+            userId: session.user?.id,
         });
 
         if (result.success) {

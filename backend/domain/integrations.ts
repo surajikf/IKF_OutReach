@@ -33,16 +33,19 @@ export interface ZohoSyncResult {
   purged: number;
 }
 
-export async function syncZohoDeals(): Promise<ZohoSyncResult> {
+export async function syncZohoDeals(userId: string): Promise<ZohoSyncResult> {
   const settings = await prisma.globalSettings.findFirst();
+  const zohoConnection = await prisma.zohoConnection.findUnique({
+    where: { userId },
+  });
 
-  if (!settings || !settings.zohoRefreshTokenEncrypted) {
+  if (!settings || !zohoConnection?.refreshTokenEncrypted) {
     throw new Error("Zoho is not connected. Please configure and authorize Zoho first.");
   }
 
   const clientId = decrypt(settings.zohoClientIdEncrypted);
   const clientSecret = decrypt(settings.zohoClientSecretEncrypted);
-  const refreshToken = decrypt(settings.zohoRefreshTokenEncrypted);
+  const refreshToken = decrypt(zohoConnection.refreshTokenEncrypted);
 
   if (!clientId || !clientSecret || !refreshToken) {
     throw new Error("Failed to decrypt Zoho credentials.");

@@ -2,7 +2,7 @@ import prisma from "@/backend/lib/prisma";
 import crypto from "crypto";
 import { ok, error } from "@/backend/lib/api-response";
 import { z } from "zod";
-import { isAdmin } from "@/backend/lib/auth";
+import { getBackendSession, isAdmin, isApprovedUser } from "@/backend/lib/auth";
 
 const RAW_ENCRYPTION_KEY =
     process.env.ENCRYPTION_KEY || "default_insecure_key_123456789012";
@@ -36,16 +36,22 @@ const zohoSettingsSchema = z.object({
 
 export async function GET(req: Request) {
     try {
-        if (!await isAdmin(req)) {
+        if (!await isApprovedUser(req)) {
             return error("FORBIDDEN", "Unauthorized access.", { status: 403 });
         }
+        const session = await getBackendSession(req);
+        if (!session?.user?.id) return error("UNAUTHORIZED", "Sign in required.", { status: 401 });
 
         const settings = await prisma.globalSettings.findFirst();
+        const zohoConnection = await prisma.zohoConnection.findUnique({
+            where: { userId: session.user.id },
+            select: { id: true },
+        });
 
         return ok({
             hasClientId: !!settings?.zohoClientIdEncrypted,
             hasClientSecret: !!settings?.zohoClientSecretEncrypted,
-            hasRefreshToken: !!settings?.zohoRefreshTokenEncrypted,
+            hasRefreshToken: !!zohoConnection,
             pipelineName: settings?.zohoPipelineName || "Sales Pipeline",
             stageName: settings?.zohoStageName || "Closed Won",
             zohoFieldMapping: settings?.zohoFieldMapping || [],

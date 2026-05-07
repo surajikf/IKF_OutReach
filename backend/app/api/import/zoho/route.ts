@@ -2,20 +2,24 @@ import { syncZohoDeals } from "@/backend/domain/integrations";
 import { ok, error } from "@/backend/lib/api-response";
 import { createClient } from "@/backend/lib/supabase/server";
 
-import { isAdmin } from "@/backend/lib/auth";
+import { getBackendSession, isApprovedUser } from "@/backend/lib/auth";
 
 export async function POST(req: Request) {
     try {
-        if (!await isAdmin(req)) {
+        if (!await isApprovedUser(req)) {
             return error(
                 "FORBIDDEN",
                 "Unauthorized access. Level-5 Clearance Required.",
                 { status: 403 },
             );
         }
+        const session = await getBackendSession(req);
+        if (!session?.user?.id) {
+            return error("UNAUTHORIZED", "Sign in required.", { status: 401 });
+        }
 
         try {
-            const result = await syncZohoDeals();
+            const result = await syncZohoDeals(session.user.id);
 
             return ok(result);
         } catch (err: any) {

@@ -2,6 +2,7 @@ import prisma from "@/backend/lib/prisma";
 import { encrypt, decrypt } from "@/backend/lib/encryption";
 import { ok, error } from "@/backend/lib/api-response";
 import { getGlobalSettings } from "@/backend/lib/settings";
+import { getBackendSession } from "@/backend/lib/auth";
 import { z } from "zod";
 
 const MASK = "********";
@@ -37,12 +38,18 @@ const settingsSchema = z.object({
     smtpSenderName: z.string().optional(),
 });
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        const session = await getBackendSession(request);
+        if (!session?.user?.id) {
+            return error("UNAUTHORIZED", "Sign in required.", { status: 401 });
+        }
+
         const settings = await getGlobalSettings();
         
-        // Fetch all registered Gmail IDs
+        // Fetch current user's registered Gmail IDs only
         const gmailAccounts = await prisma.gmailAccount.findMany({
+            where: { userId: session.user.id },
             orderBy: { updatedAt: "desc" }
         });
 

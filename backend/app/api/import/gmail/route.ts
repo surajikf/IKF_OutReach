@@ -17,14 +17,18 @@ const gmailImportSchema = z.object({
     }).optional(),
 });
 
-import { isAdmin } from "@/backend/lib/auth";
+import { getBackendSession, isApprovedUser } from "@/backend/lib/auth";
 
 export async function POST(request: Request) {
     try {
-        if (!await isAdmin(request)) {
+        if (!await isApprovedUser(request)) {
             return error("FORBIDDEN", "Unauthorized access. Level-5 Clearance Required.", {
                 status: 403,
             });
+        }
+        const session = await getBackendSession(request);
+        if (!session?.user?.id) {
+            return error("UNAUTHORIZED", "Sign in required.", { status: 401 });
         }
 
         const json = await request.json();
@@ -39,11 +43,11 @@ export async function POST(request: Request) {
 
         const { accountId, options } = parsed.data;
 
-        const account = await prisma.gmailAccount.findUnique({
-            where: { id: accountId },
+        const account = await prisma.gmailAccount.findFirst({
+            where: { id: accountId, userId: session.user.id },
         });
         if (!account) {
-            return error("NOT_FOUND", "Account not found", { status: 404 });
+            return error("NOT_FOUND", "Account not found for current user", { status: 404 });
         }
 
         // Check for immediate execution flag

@@ -33,8 +33,8 @@ export async function POST(request: NextRequest) {
 
         // Prefer dispatching from the currently signed-in Gmail identity to avoid stale default-account tokens.
         const sessionEmail = session.user.email;
-        const preferredGmailAccount = await prisma.gmailAccount.findUnique({
-            where: { email: sessionEmail },
+        const preferredGmailAccount = await prisma.gmailAccount.findFirst({
+            where: { email: sessionEmail, userId: session.user.id as string },
             select: { id: true, scopeGranted: true },
         });
 
@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
             forceProvider: "GMAIL",
             disableFailover: true,
             overrideGmailAccountId: preferredGmailAccount?.id,
+            userId: session.user.id as string,
         });
 
         if (result.success) {
