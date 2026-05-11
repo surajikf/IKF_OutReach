@@ -1,0 +1,43 @@
+name: Auto Deploy to On-Premises Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    # This specifically targets a self-hosted runner on your Ubuntu server
+    runs-on: self-hosted
+
+    steps:
+      - name: Deploy Application
+        # Since the runner is on the server itself, we can execute the build directly in your app directory
+        run: |
+          echo "Starting deployment..."
+          
+          # Navigate to your application directory
+          cd /var/www/apps/outreach/
+          
+          # Pull the latest code from the main branch
+          git fetch origin main
+          git reset --hard origin/main
+          
+          # Install dependencies and build the backend
+          echo "Building Backend..."
+          cd backend
+          npm install
+          npm run build
+          
+          # Install dependencies and build the frontend
+          echo "Building Frontend..."
+          cd ../frontend
+          npm install
+          npm run build
+          
+          # Restart the PM2 processes (frontend, backend, and worker)
+          echo "Restarting PM2 processes..."
+          cd ..
+          pm2 restart ecosystem.config.js
+          
+          echo "Deployment successful!"
