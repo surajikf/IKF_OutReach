@@ -7,37 +7,46 @@ on:
 
 jobs:
   deploy:
-    # This specifically targets a self-hosted runner on your Ubuntu server
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, x64]
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Adjust ownership and permissions
+        run: |
+          echo "Setting ownership to ${{ vars.APP_USER }}:${{ vars.APP_GROUP }}..."
+          sudo chown -R ${{ vars.APP_USER }}:${{ vars.APP_GROUP }} ${{ vars.REPO_PATH }}
+          sudo chmod -R u+rwX ${{ vars.REPO_PATH }}/backend/.next || true
+          sudo chmod -R u+rwX ${{ vars.REPO_PATH }}/frontend/.next || true
+
       - name: Deploy Application
-        # Since the runner is on the server itself, we can execute the build directly in your app directory
         run: |
           echo "Starting deployment..."
-          
-          # Navigate to your application directory
-          cd /var/www/apps/outreach/
-          
-          # Pull the latest code from the main branch
+          cd ${{ vars.REPO_PATH }}
+
           git fetch origin main
           git reset --hard origin/main
-          
-          # Install dependencies and build the backend
+
           echo "Building Backend..."
           cd backend
-          npm install
+          npm ci
           npm run build
-          
-          # Install dependencies and build the frontend
+
           echo "Building Frontend..."
           cd ../frontend
-          npm install
+          npm ci
           npm run build
-          
-          # Restart the PM2 processes (frontend, backend, and worker)
+
           echo "Restarting PM2 processes..."
           cd ..
           pm2 restart ecosystem.config.js
-          
-          echo "Deployment successful!"
+
+          echo "Deployment completed successfully!"
