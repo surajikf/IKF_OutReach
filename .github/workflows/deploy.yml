@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+env:
+  REPO_PATH: /var/www/apps/outreach
+  APP_USER: ikf-support
+  APP_GROUP: www-data
+
 jobs:
   deploy:
     runs-on: [self-hosted, linux, x64]
@@ -22,15 +27,15 @@ jobs:
 
       - name: Adjust ownership and permissions
         run: |
-          echo "Setting ownership to ${{ vars.APP_USER }}:${{ vars.APP_GROUP }}..."
-          sudo chown -R ${{ vars.APP_USER }}:${{ vars.APP_GROUP }} ${{ vars.REPO_PATH }}
-          sudo chmod -R u+rwX ${{ vars.REPO_PATH }}/backend/.next || true
-          sudo chmod -R u+rwX ${{ vars.REPO_PATH }}/frontend/.next || true
+          echo "Setting ownership to $APP_USER:$APP_GROUP..."
+          sudo chown -R $APP_USER:$APP_GROUP $REPO_PATH
+          sudo chmod -R u+rwX $REPO_PATH/backend/.next || true
+          sudo chmod -R u+rwX $REPO_PATH/frontend/.next || true
 
       - name: Deploy Application
         run: |
           echo "Starting deployment..."
-          cd ${{ vars.REPO_PATH }}
+          cd $REPO_PATH
 
           git fetch origin main
           git reset --hard origin/main
