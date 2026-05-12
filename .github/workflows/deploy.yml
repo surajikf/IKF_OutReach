@@ -15,9 +15,12 @@ jobs:
 
       - name: Sync Project Files
         run: |
-          sudo rsync -av --delete \
+          sudo rsync -av \
+            --exclude='.git' \
+            --exclude='.github' \
             --exclude='.env' \
             --exclude='node_modules' \
+            --exclude='.next' \
             ./ /var/www/apps/outreach/
 
       - name: Set Permissions
@@ -38,11 +41,25 @@ jobs:
       - name: Build Application
         run: |
           cd /var/www/apps/outreach
+
+          export $(grep -v '^#' .env | xargs)
+
           npm run build
+
+      - name: Copy Static Files
+        run: |
+          cd /var/www/apps/outreach
+
+          mkdir -p .next/standalone/.next
+
+          cp -r .next/static .next/standalone/.next/
+
+          cp -r public .next/standalone/
 
       - name: Restart PM2
         run: |
           cd /var/www/apps/outreach
+
           pm2 restart outreach --update-env
 
       - name: Save PM2
