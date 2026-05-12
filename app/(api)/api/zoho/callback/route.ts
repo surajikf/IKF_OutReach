@@ -29,22 +29,22 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const code = searchParams.get("code");
     const error = searchParams.get("error");
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
     if (error) {
-        return NextResponse.redirect(new URL(`/import?error=${encodeURIComponent(error)}`, req.url));
+        return NextResponse.redirect(new URL(`/import?error=${encodeURIComponent(error)}`, appUrl));
     }
 
     if (!code) {
-        return NextResponse.redirect(new URL("/import?error=missing_code", req.url));
+        return NextResponse.redirect(new URL("/import?error=missing_code", appUrl));
     }
 
     const clientId = process.env.ZOHO_CLIENT_ID;
     const clientSecret = process.env.ZOHO_CLIENT_SECRET;
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const redirectUri = `${appUrl}/api/zoho/callback`;
 
     if (!clientId || !clientSecret) {
-        return NextResponse.redirect(new URL("/import?error=env_not_configured", req.url));
+        return NextResponse.redirect(new URL("/import?error=env_not_configured", appUrl));
     }
 
     try {
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
 
         if (tokenData.error || !tokenData.refresh_token) {
             console.error("[ZOHO_CALLBACK] Token Error:", tokenData);
-            return NextResponse.redirect(new URL(`/import?error=${encodeURIComponent(tokenData.error || "failed_to_get_refresh_token")}`, req.url));
+            return NextResponse.redirect(new URL(`/import?error=${encodeURIComponent(tokenData.error || "failed_to_get_refresh_token")}`, appUrl));
         }
 
         const refreshTokenEncrypted = encrypt(tokenData.refresh_token);
@@ -84,9 +84,9 @@ export async function GET(req: NextRequest) {
             },
         });
 
-        return NextResponse.redirect(new URL("/import?zoho=success", req.url));
+        return NextResponse.redirect(new URL("/import?zoho=success", appUrl));
     } catch (err: any) {
         console.error("[ZOHO_CALLBACK] Catch Error:", err);
-        return NextResponse.redirect(new URL(`/import?error=${encodeURIComponent(err.message || "internal_server_error")}`, req.url));
+        return NextResponse.redirect(new URL(`/import?error=${encodeURIComponent(err.message || "internal_server_error")}`, appUrl));
     }
 }
