@@ -1014,7 +1014,7 @@ export default function ImportIntegrationsPage() {
                             {googleContactsConnected && (
                                 <button
                                     onClick={handleGoogleContactsSync}
-                                    disabled={!googleContactsAccountId || (googleContactsAccountId && syncStatus.gmail[googleContactsAccountId] === "syncing")}
+                                    disabled={!googleContactsAccountId || syncStatus.gmail[googleContactsAccountId] === "syncing"}
                                     className="w-full h-10 bg-white border border-emerald-200 text-emerald-700 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-50 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                                 >
                                     <RefreshCw className={cn("w-3.5 h-3.5", googleContactsAccountId && syncStatus.gmail[googleContactsAccountId] === "syncing" && "animate-spin")} />
