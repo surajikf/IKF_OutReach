@@ -59,6 +59,7 @@ model CampaignHistory {
   generatedOutput String
   clientId        String?
   userId          String?
+  gmailDraftId    String?
   dateCreated     DateTime @default(now())
   client          Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
   user            User?    @relation(fields: [userId], references: [id])

@@ -548,13 +548,15 @@ async function runDispatchBatch(job: JobRow) {
 
       console.log(`[job-worker] Dispatching campaign ${campaignId} to ${campaign.client.email} (Mode: ${dispatchMode})`);
 
+      const existingDraftId = (campaign as any).gmailDraftId || undefined;
+
       const result = dispatchMode === "DRAFT"
         ? await createStrategicGmailDraft({
             to: campaign.client.email,
             subject,
             html: htmlBody,
             text: body.replace(/<[^>]*>/g, ""),
-          }, { userId: payload?.userId })
+          }, { userId: payload?.userId, existingDraftId })
         : await sendStrategicEmail({
             to: campaign.client.email,
             subject,
@@ -568,6 +570,14 @@ async function runDispatchBatch(job: JobRow) {
       }
 
       console.log(`[job-worker] Dispatch successful for campaign ${campaignId}. MessageId: ${result.messageId}`);
+
+      // Store Gmail draft ID so "Update Draft" can reuse the same draft instead of creating a new one
+      if (dispatchMode === "DRAFT" && (result as any).draftId) {
+        await (prisma as any).campaignHistory.update({
+          where: { id: campaignId },
+          data: { gmailDraftId: (result as any).draftId },
+        }).catch((err: any) => console.warn(`[job-worker] Failed to store draftId for ${campaignId}:`, err));
+      }
 
       // Smart Rate Limiting: 150ms delay to prevent burst issues
       await sleep(150);
