@@ -87,7 +87,7 @@ export async function syncZohoDeals(userId: string): Promise<ZohoSyncResult> {
   });
 
   if (dealsRes.status === 204) {
-    return { count: 0, conflicts: 0, purged: 0 };
+    return { count: 0, fetched: 0, conflicts: 0, purged: 0 };
   }
 
   const dealsData = await dealsRes.json();
