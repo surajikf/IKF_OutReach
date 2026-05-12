@@ -233,16 +233,18 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
 
   // 2) Fetch recent messages
   console.log("[GMAIL_SYNC] Fetching messages from Google API...");
-  const queryParts: string[] = ["after:2024/01/01"];
-  if (syncOptions.sourceFolders.includes("INBOX")) queryParts.push("in:inbox");
-  if (syncOptions.sourceFolders.includes("SENT")) queryParts.push("in:sent");
+  const folderClauses: string[] = [];
+  if (syncOptions.sourceFolders.includes("INBOX")) folderClauses.push("in:inbox");
+  if (syncOptions.sourceFolders.includes("SENT")) folderClauses.push("in:sent");
   const labelClauses = syncOptions.sourceFolders.includes("LABEL")
     ? syncOptions.customLabels.map((label) => `label:${label.replace(/\s+/g, "-")}`)
     : [];
-  if (labelClauses.length > 0) {
-    queryParts.push(`(${labelClauses.join(" OR ")})`);
-  }
-  const gmailQuery = queryParts.join(" ");
+  const allFolderClauses = [...folderClauses, ...labelClauses];
+  // Use OR logic so emails from any selected folder are included
+  const folderQuery = allFolderClauses.length > 1
+    ? `{${allFolderClauses.join(" ")}}`
+    : allFolderClauses[0] || "in:inbox";
+  const gmailQuery = `after:2024/01/01 ${folderQuery}`;
 
   const messagesRes = await fetch(
     `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=40&q=${encodeURIComponent(gmailQuery)}`,
@@ -250,7 +252,9 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
   );
 
   if (!messagesRes.ok) {
-    throw new Error("Failed to read Gmail messages.");
+    const errBody = await messagesRes.json().catch(() => ({}));
+    const errMsg = errBody?.error?.message || errBody?.error || messagesRes.statusText || "unknown";
+    throw new Error(`Gmail API error (${messagesRes.status}): ${errMsg}`);
   }
 
   const { messages = [] } = await messagesRes.json();

@@ -595,7 +595,8 @@ async function runGmailImport(job: JobRow) {
   const payload = job.payload as any;
   const accountId: string = String(payload?.accountId || "");
   const options = payload?.options || undefined;
-  return await runGmailSync(accountId, options);
+  const cleanupMode = payload?.cleanupMode || "none";
+  return await runGmailSync(accountId, options, cleanupMode);
 }
 
 async function main() {

@@ -489,8 +489,11 @@ export default function ImportIntegrationsPage() {
                 saveProfileForAccount(accountEmail.toLowerCase(), gmailSyncProfile);
             }
             await fetchGmailAccounts();
-        } catch (error) {
-            toast.error(`Network error during ${accountName} sync.`);
+        } catch (error: any) {
+            const msg = error?.message && !error.message.includes("NetworkError") && !error.message.includes("Failed to fetch")
+                ? error.message
+                : `Network error during ${accountName} sync. Please check your connection and try again.`;
+            toast.error(msg);
             setGmailStatus(accountId, "error");
         } finally {
             inFlightKeysRef.current.delete(lockKey);
