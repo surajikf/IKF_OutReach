@@ -40,20 +40,15 @@ jobs:
           git fetch origin main
           git reset --hard origin/main
 
-      - name: Build Backend
+      - name: Build Application
         run: |
-          cd $REPO_PATH/backend
-          npm ci
-          npm run build
-
-      - name: Build Frontend
-        run: |
-          cd $REPO_PATH/frontend
-          npm ci
+          cd $REPO_PATH
+          npm install
+          npx prisma generate
           npm run build
 
       - name: Restart PM2 processes
         run: |
           cd $REPO_PATH
-          pm2 restart ecosystem.config.js
+          pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js
           echo "Deployment completed successfully!"
