@@ -39,6 +39,7 @@ jobs:
           cd $REPO_PATH
           git fetch origin main
           git reset --hard origin/main
+          echo "Current Commit: $(git rev-parse HEAD)"
 
       - name: Build Application
         run: |
