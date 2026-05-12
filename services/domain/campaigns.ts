@@ -93,7 +93,7 @@ export async function estimateCampaignAudience(
   excludedIds: string[] = [],
   userId?: string,
 ) {
-  const where = buildAudienceWhere(audienceSource, type, serviceFilters, serviceLogic, excludedIds, false);
+  const where: any = buildAudienceWhere(audienceSource, type, serviceFilters, serviceLogic, excludedIds, false);
   if (userId) where.userId = userId;
 
   // Sequentialize to avoid PgBouncer/Transaction mode concurrency hangs
@@ -177,7 +177,7 @@ export async function getTargetClients(
   includeExclusions: boolean = false,
   userId?: string,
 ) {
-  const where = buildAudienceWhere(audienceSource, type, serviceFilters, serviceLogic, excludedIds, includeExclusions);
+  const where: any = buildAudienceWhere(audienceSource, type, serviceFilters, serviceLogic, excludedIds, includeExclusions);
   if (userId) where.userId = userId;
 
   return await prisma.client.findMany({
