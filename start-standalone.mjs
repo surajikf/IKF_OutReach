@@ -5,8 +5,17 @@ import { fileURLToPath } from "node:url";
 
 const workspaceDir = dirname(fileURLToPath(import.meta.url));
 const repoDir = dirname(workspaceDir);
-const serverEntrypoint = join(workspaceDir, ".next", "standalone", "frontend", "server.js");
+const serverEntrypointCandidates = [
+  join(workspaceDir, ".next", "standalone", "server.js"),
+  join(workspaceDir, ".next", "standalone", "frontend", "server.js"),
+];
+const serverEntrypoint = serverEntrypointCandidates.find((candidate) => existsSync(candidate));
 const nodeEnv = process.env.NODE_ENV || "production";
+
+if (!serverEntrypoint) {
+  const searched = serverEntrypointCandidates.map((entry) => `- ${entry}`).join("\n");
+  throw new Error(`Could not find Next standalone server entrypoint. Searched:\n${searched}`);
+}
 
 for (const envFile of [
   join(workspaceDir, `.env.${nodeEnv}.local`),
