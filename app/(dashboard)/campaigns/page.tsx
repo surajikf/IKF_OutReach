@@ -786,13 +786,13 @@ export default function CampaignGenerator() {
             <div className="w-full pb-20 px-3 sm:px-4 lg:px-6">
                 <div className="mb-8 flex items-center justify-between">
                     <div>
-                        <button onClick={() => setIsReviewing(false)} className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-blue-600 transition-colors uppercase tracking-widest mb-2">
+                        <button onClick={() => setIsReviewing(false)} className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-blue-600 transition-colors mb-2">
                             <ChevronLeft className="w-3.5 h-3.5" />
                             Back to Config
                         </button>
-                        <h2 className="text-3xl font-semibold tracking-tight text-slate-900 flex items-center gap-3">
+                        <h2 className="text-xl font-semibold tracking-tight text-slate-900 flex items-center gap-2.5">
                             Refine Your Message
-                            <Sparkles className="w-6 h-6 text-amber-500 animate-pulse" />
+                            <Sparkles className="w-5 h-5 text-amber-500 animate-pulse" />
                         </h2>
                         <p className="text-sm font-medium text-slate-500 mt-1">
                             Review the AI-generated sample for <span className="text-blue-600 font-bold">{sampleData.clientName || sampleData.email || "Selected Client"}</span>.
@@ -940,8 +940,8 @@ export default function CampaignGenerator() {
     return (
         <div className="w-full pb-14 md:pb-20 px-3 sm:px-4 lg:px-6">
             <div className="mb-6 md:mb-8">
-                <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Campaign Builder</h2>
-                <p className="text-sm font-medium text-slate-500 mt-1">Choose options and generate your campaign.</p>
+                <h2 className="text-xl font-semibold tracking-tight text-slate-900">Campaign Builder</h2>
+                <p className="text-sm text-slate-500 mt-1">Choose options and generate your campaign.</p>
                 <div className="mt-4 bg-white border border-slate-200 rounded-lg px-4 py-3">
                     <div className="flex items-center justify-between">
                         <p className="text-xs font-semibold text-slate-600">Step {currentStep} of {stepStatus.length}</p>
@@ -1056,7 +1056,7 @@ export default function CampaignGenerator() {
                             <div>
                                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Audience Size</p>
                                 <div className="flex items-end gap-3">
-                                    <span className="text-3xl md:text-4xl font-semibold tracking-tight text-slate-900">{audienceSources.length === 0 || !selectedType ? "-" : loadingAudience ? <RefreshCw className="w-6 h-6 animate-spin text-slate-300" /> : audienceData.count}</span>
+                                    <span className="text-2xl font-semibold tracking-tight text-slate-900">{audienceSources.length === 0 || !selectedType ? "-" : loadingAudience ? <RefreshCw className="w-5 h-5 animate-spin text-slate-300" /> : audienceData.count}</span>
                                 </div>
                                 {audienceSources.length > 0 && selectedType && !loadingAudience && audienceData.count > 0 && (
                                     <p className="mt-2 text-xs text-slate-600 flex items-center justify-between">

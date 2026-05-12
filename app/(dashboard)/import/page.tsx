@@ -693,10 +693,10 @@ export default function ImportIntegrationsPage() {
             <header className="px-2">
                 <div className="flex items-center gap-3 text-blue-600 mb-2">
                     <DownloadCloud className="w-5 h-5" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Data Import</span>
+                    <span className="text-xs font-medium text-slate-500">Data Import</span>
                 </div>
-                <h2 className="text-3xl font-bold tracking-tight text-slate-900">Integrations</h2>
-                <p className="text-slate-500 font-medium text-sm mt-1">Connect external data channels and synchronize your client base.</p>
+                <h2 className="text-xl font-semibold tracking-tight text-slate-900">Integrations</h2>
+                <p className="text-sm text-slate-500 mt-1">Connect external data channels and synchronize your client base.</p>
             </header>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

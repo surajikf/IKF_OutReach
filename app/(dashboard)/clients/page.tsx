@@ -814,10 +814,10 @@ export default function ClientManager() {
         <div className="space-y-8 w-full max-w-[100vw] px-4 md:px-6 lg:px-8 pb-20">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 px-2">
                 <div className="space-y-1">
-                    <h2 className="text-3xl font-semibold tracking-tight text-slate-900">
+                    <h2 className="text-xl font-semibold tracking-tight text-slate-900">
                         {view === "clients" ? "Portfolio" : view === "services" ? "Capabilities" : "Role-Based Contacts"}
                     </h2>
-                    <p className="text-sm font-medium text-slate-500">
+                    <p className="text-sm text-slate-500">
                         {view === "clients" ? "Manage and segment your company records." :
                             view === "services" ? "Configure service offerings and categories." :
                                 "Isolated generic business and system emails."}

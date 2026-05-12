@@ -142,9 +142,9 @@ export default function AdminDashboard() {
       <header className="px-1">
         <div className="flex items-center gap-2 text-red-600 mb-2">
           <ShieldAlert className="w-4 h-4" />
-          <span className="text-[10px] font-bold uppercase tracking-widest">Level-5 Clearance Zone</span>
+          <span className="text-xs font-medium text-slate-500">Control Panel</span>
         </div>
-        <h1 className="text-3xl font-bold text-slate-900">Access Management</h1>
+        <h1 className="text-xl font-semibold text-slate-900">Access Management</h1>
         <p className="text-sm text-slate-500 mt-1">Approve users and manage role and invoice access.</p>
       </header>
 
