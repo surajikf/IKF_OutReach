@@ -13,14 +13,11 @@ import { appPath } from "@/lib/app-path";
 export default function LoginPage() {
     const { data: session, status: authStatus } = useSession();
     const router = useRouter();
-    const [mounted, setMounted] = useState(false);
     const [loading, setLoading] = useState(false);
     const { projectLogo } = useBranding();
     const authBrandName = "IKF Outreach";
 
     useEffect(() => {
-        setMounted(true);
-        
         if (typeof window !== "undefined") {
             const params = new URLSearchParams(window.location.search);
             const errorMsg = params.get("error");
@@ -50,8 +47,6 @@ export default function LoginPage() {
             setLoading(false);
         }
     };
-
-    if (!mounted) return null;
 
     return (
         <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-slate-50">
