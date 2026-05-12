@@ -84,7 +84,7 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
     const [isLivePreview, setIsLivePreview] = useState(false);
     const [historyState, setHistoryState] = useState({ index: 0, length: 1 });
     const [showVarMenu, setShowVarMenu] = useState(false);
-    const [prefFontFamily, setPrefFontFamily] = useState("");
+    const [prefFontFamily, setPrefFontFamily] = useState("Calibri, sans-serif");
     const [prefFontSize, setPrefFontSize] = useState("14px");
 
     const historyRef = useRef<string[]>([normalizeEmailBodyHtml(content || "")]);
@@ -130,18 +130,15 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
         setPrefFontSize(prefs.fontSize);
     }, []);
 
-    // Apply saved font prefs when editor is ready and content loads
+    // Apply font prefs (defaulting to Calibri 14px) when editor is ready
     useEffect(() => {
         if (!editor) return;
         const prefs = readEditorPrefs();
-        if (!prefs.fontFamily && !prefs.fontSize) return;
-        // Select all and apply the saved font prefs, then deselect
-        editor.chain()
-            .selectAll()
-            .run();
-        if (prefs.fontFamily) editor.chain().focus().setFontFamily(prefs.fontFamily).run();
-        if (prefs.fontSize) (editor.chain().focus() as any).setFontSize(prefs.fontSize).run();
-        // Move cursor to end to deselect
+        const fontFamily = prefs.fontFamily || "Calibri, sans-serif";
+        const fontSize = prefs.fontSize || "14px";
+        editor.chain().selectAll().run();
+        editor.chain().focus().setFontFamily(fontFamily).run();
+        (editor.chain().focus() as any).setFontSize(fontSize).run();
         editor.commands.focus("end");
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editor]);
@@ -170,14 +167,14 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
         lastRecordedRef.current = normalized;
         setHistoryState({ index: 0, length: 1 });
 
-        // Re-apply saved font prefs to the newly loaded content
+        // Re-apply font prefs (Calibri 14px default) to newly loaded content
         const prefs = readEditorPrefs();
-        if (prefs.fontFamily || prefs.fontSize) {
-            editor.chain().selectAll().run();
-            if (prefs.fontFamily) editor.chain().focus().setFontFamily(prefs.fontFamily).run();
-            if (prefs.fontSize) (editor.chain().focus() as any).setFontSize(prefs.fontSize).run();
-            editor.commands.focus("end");
-        }
+        const fontFamily = prefs.fontFamily || "Calibri, sans-serif";
+        const fontSize = prefs.fontSize || "14px";
+        editor.chain().selectAll().run();
+        editor.chain().focus().setFontFamily(fontFamily).run();
+        (editor.chain().focus() as any).setFontSize(fontSize).run();
+        editor.commands.focus("end");
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [content, editor]);
 
@@ -335,7 +332,7 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
     ];
 
     const currentFontSize = editor.getAttributes("textStyle").fontSize || prefFontSize || "14px";
-    const currentFontFamily = editor.getAttributes("textStyle").fontFamily || prefFontFamily || "";
+    const currentFontFamily = editor.getAttributes("textStyle").fontFamily || prefFontFamily || "Calibri, sans-serif";
 
     return (
         <div className="w-full border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xl ring-1 ring-slate-200/50">
@@ -357,7 +354,6 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
                     className="h-7 text-[11px] font-medium text-slate-700 border border-slate-200 rounded-lg px-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer max-w-[110px]"
                     title="Font Family"
                 >
-                    <option value="">Sans Serif</option>
                     {FONT_FAMILIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                 </select>
 
