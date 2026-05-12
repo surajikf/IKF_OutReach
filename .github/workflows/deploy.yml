@@ -40,10 +40,20 @@ jobs:
           cd /var/www/apps/outreach
           npm run build
 
-      - name: Restart PM2
+      - name: Start or Restart PM2
         run: |
           cd /var/www/apps/outreach
+
+          pm2 describe outreach > /dev/null
+
+          if [ $? -eq 0 ]; then
           pm2 restart outreach --update-env
+          else
+          PORT=3000 HOSTNAME=0.0.0.0 \
+          pm2 start start-standalone.mjs \
+          --interpreter node \
+          --name outreach
+          fi
 
       - name: Save PM2
         run: |
