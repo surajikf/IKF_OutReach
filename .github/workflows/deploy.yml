@@ -15,7 +15,10 @@ jobs:
 
       - name: Sync Project Files
         run: |
-          sudo rsync -av --delete ./ /var/www/apps/outreach/
+          sudo rsync -av --delete \
+          --exclude='.env' \
+          --exclude='node_modules' \
+          ./ /var/www/apps/outreach/
 
       - name: Set Permissions
         run: |
@@ -30,13 +33,11 @@ jobs:
       - name: Generate Prisma Client
         run: |
           cd /var/www/apps/outreach
-          export $(grep -v '^#' .env | xargs)
           npx prisma generate
 
       - name: Build Application
         run: |
           cd /var/www/apps/outreach
-          export $(grep -v '^#' .env | xargs)
           npm run build
 
       - name: Restart PM2
