@@ -105,8 +105,8 @@ export default function Dashboard() {
   };
 
   const summaryCards = [
-    { id: "database", label: "Total Clients", title: "Total number of clients in your system", value: safe.stats.totalClients, sub: "total records", icon: Users },
-    { id: "activeRatio", label: "Active Clients %", title: "Percentage of clients who are currently engaged", value: `${safe.audienceState.activeRatio}%`, sub: "engagement rate", icon: Activity },
+    { id: "database", label: "Total Clients", title: "Total number of clients in your system", value: safe.stats.totalClients, sub: "total records", icon: Users, accent: "blue" },
+    { id: "activeRatio", label: "Active Clients %", title: "Percentage of clients who are currently engaged", value: `${safe.audienceState.activeRatio}%`, sub: "engagement rate", icon: Activity, accent: "blue" },
     {
       id: "lastOutreach",
       label: "Last Message Sent",
@@ -116,7 +116,9 @@ export default function Dashboard() {
         : "No outreach yet",
       sub: "recent activity",
       icon: Mail,
+      accent: "blue",
     },
+    { id: "dataQuality", label: "Data Quality", title: "Overall completeness of your client profiles and contact data", value: `${safe.dataHealth.profileIntegrity}%`, sub: "profile completeness", icon: Activity, accent: "emerald" },
   ];
 
   const maxTrendValue = Math.max(1, ...(safe.chartData || []).map((d) => d.value || 0));
@@ -177,32 +179,24 @@ export default function Dashboard() {
           {summaryCards.map((card) => (
             <div key={card.id} className="bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm hover:shadow-md transition-shadow group/card" title={card.title}>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover/card:text-blue-500 transition-colors">{card.label}</span>
-                <card.icon className="w-4 h-4 text-blue-500" />
+                <span className={`text-[10px] font-black uppercase tracking-widest text-slate-400 transition-colors ${card.accent === "emerald" ? "group-hover/card:text-emerald-500" : "group-hover/card:text-blue-500"}`}>{card.label}</span>
+                <card.icon className={`w-4 h-4 ${card.accent === "emerald" ? "text-emerald-500" : "text-blue-500"}`} />
               </div>
               <div className="text-2xl font-bold text-slate-900">{card.value}</div>
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-tight">{card.sub}</div>
             </div>
           ))}
-          <div className="bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm hover:shadow-md transition-shadow group/card" title="Overall completeness of your client profiles and contact data">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover/card:text-emerald-500 transition-colors">Data Quality</span>
-              <Activity className="w-4 h-4 text-emerald-500" />
-            </div>
-            <div className="text-2xl font-bold text-slate-900">{safe.dataHealth.profileIntegrity}%</div>
-            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-tight">profile completeness</div>
-          </div>
         </section>
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
           <section className="xl:col-span-4 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3" title="The smartest next step to take based on your current data">Recommended Step</p>
-            <h2 className="text-xl font-bold text-slate-900 mb-2">{safe.recommendedAction.actionType.replace(/_/g, " ")}</h2>
+            <h2 className="text-xl font-bold text-slate-900 mb-2 capitalize">{safe.recommendedAction.actionType.replace(/_/g, " ")}</h2>
             <p className="text-sm font-medium text-slate-500 mb-3">{safe.recommendedAction.reason}</p>
             <div className="bg-slate-50 rounded-xl p-3 mb-6">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mb-1">Expected Impact</p>
               <p className="text-xs font-bold text-blue-700">
-                {safe.recommendedAction.impactEstimate} ┬╖ Targeting {safe.recommendedAction.targetCount} Clients
+                {safe.recommendedAction.impactEstimate} · Targeting {safe.recommendedAction.targetCount} Clients
               </p>
             </div>
             <button
@@ -261,7 +255,7 @@ export default function Dashboard() {
               <div className="flex items-center gap-3 mb-4">
                 <LineChart className="w-4 h-4 text-blue-500" />
                 <span className="text-[10px] font-black uppercase tracking-[.15em] text-slate-500">7-Day Engagement Velocity</span>
-                <span className="ml-auto text-[10px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded uppercase">
+                <span className={`ml-auto text-[10px] font-black px-2 py-0.5 rounded uppercase ${campaignDelta >= 0 ? "text-emerald-600 bg-emerald-50" : "text-rose-600 bg-rose-50"}`}>
                   {campaignDelta >= 0 ? "+" : ""}{campaignDelta} Change
                 </span>
               </div>
