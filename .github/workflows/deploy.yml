@@ -13,16 +13,14 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set Ownership
+      - name: Sync Project Files
+        run: |
+          sudo rsync -av --delete ./ /var/www/apps/outreach/
+
+      - name: Set Permissions
         run: |
           sudo chown -R ikf-support:www-data /var/www/apps/outreach
           sudo chmod -R 775 /var/www/apps/outreach
-
-      - name: Pull Latest Code
-        run: |
-          cd /var/www/apps/outreach
-          git fetch origin
-          git reset --hard origin/main
 
       - name: Install Dependencies
         run: |
@@ -34,7 +32,7 @@ jobs:
           cd /var/www/apps/outreach
           npx prisma generate
 
-      - name: Build Next.js Application
+      - name: Build Application
         run: |
           cd /var/www/apps/outreach
           npm run build
