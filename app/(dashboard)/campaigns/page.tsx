@@ -60,21 +60,21 @@ const audienceSourceOptions: Array<{
         id: "INVOICE_SYSTEM",
         name: "Invoice",
         desc: "Use contacts from invoice records.",
-        note: "Includes invoice history and service data. Best for service-based campaigns.",
+        note: "Includes invoice & service history.",
         icon: Database,
     },
     {
         id: "ZOHO_BIGIN",
         name: "Zoho Bigin",
         desc: "Use contacts from Zoho CRM.",
-        note: "Uses CRM fields and stages only. No invoice/service history.",
+        note: "CRM fields & stages only.",
         icon: Building2,
     },
     {
         id: "GMAIL",
         name: "Gmail",
         desc: "Use contacts synced from Gmail.",
-        note: "Email-contact based targeting only. No invoice/service history.",
+        note: "Email contacts only, no invoice data.",
         icon: Mail,
     },
 ];
@@ -972,7 +972,7 @@ export default function CampaignGenerator() {
                                         {audienceSources.includes(source.id) && <CheckCircle2 className="w-5 h-5 text-blue-600" />}
                                     </div>
                                     <p className="text-[11px] text-slate-500 leading-relaxed font-medium">{source.desc}</p>
-                                    <p className="text-[9px] font-black text-blue-600/90 uppercase tracking-[0.1em] mt-3">{source.note}</p>
+                                    <p className="text-[10px] font-medium text-blue-500 mt-2 leading-snug">{source.note}</p>
                                 </button>
                             ))}
                         </div>
@@ -981,7 +981,7 @@ export default function CampaignGenerator() {
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                         <div className="px-4 sm:px-5 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                             <h3 className="text-base font-bold text-slate-900 tracking-tight uppercase">1. Select Goal</h3>
-                            <p className="text-[11px] font-medium text-slate-400 mt-1 uppercase tracking-wide">Source = where contacts come from. Goal = how you want to message them.</p>
+                            <p className="text-[11px] text-slate-400 mt-1">Source = where contacts come from. Goal = how you want to message them.</p>
                         </div>
                         <div className={cn("p-4 sm:p-5 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-4", audienceSources.length === 0 && "opacity-50 pointer-events-none select-none")}>
                             {campaignTypes.filter((type) => !(type.id === "Reactivation" && !hasInvoiceSelected)).filter((type) => !(type.id === "Cross-Sell" && !hasInvoiceSelected)).map((type) => (
@@ -995,8 +995,8 @@ export default function CampaignGenerator() {
                                     </div>
                                     <p className="text-[11px] text-slate-500 mb-3 leading-relaxed font-medium">{type.desc}</p>
                                     <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
-                                        <div className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-slate-400" /><span className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">{type.target}</span></div>
-                                        <div className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5 text-blue-400" /><span className="text-[9px] font-black text-blue-600/80 uppercase tracking-[0.1em] leading-none">{`Use for: ${type.bestFor}`}</span></div>
+                                        <div className="flex items-center gap-1.5"><Users className="w-3 h-3 text-slate-400" /><span className="text-[10px] font-medium text-slate-400">{type.target}</span></div>
+                                        <div className="flex items-center gap-1.5"><Zap className="w-3 h-3 text-blue-400" /><span className="text-[10px] font-medium text-blue-500">{type.bestFor}</span></div>
                                     </div>
                                 </div>
                             ))}
