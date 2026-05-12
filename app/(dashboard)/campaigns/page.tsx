@@ -1131,24 +1131,99 @@ export default function CampaignGenerator() {
                 <div className="w-full lg:w-[22rem] 2xl:w-96 flex-shrink-0 lg:sticky lg:top-6 space-y-4 md:space-y-6">
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                         <div className="px-4 sm:px-5 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-                            <Network className="w-4 h-4 text-blue-600" /><h3 className="text-sm font-semibold text-slate-900">Pre-Flight Check</h3>
+                            <Network className="w-4 h-4 text-blue-600" />
+                            <h3 className="text-sm font-semibold text-slate-900">Pre-Flight Check</h3>
+                            {isReady && audienceData.count > 0 && (
+                                <span className="ml-auto text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">All set</span>
+                            )}
                         </div>
-                        <div className="p-4 sm:p-5 md:p-6 space-y-5 md:space-y-6">
+                        <div className="p-4 sm:p-5 md:p-6 space-y-4">
+
+                            {/* Step checklist */}
+                            <div className="space-y-2">
+                                {[
+                                    { label: "Audience source selected", done: audienceSources.length > 0, hint: "Pick Invoice, Zoho, or Gmail" },
+                                    { label: "Campaign goal chosen", done: !!selectedType, hint: "Select Broadcast, Targeted, etc." },
+                                    { label: "Audience loaded", done: audienceData.count > 0, hint: "At least 1 matching client needed" },
+                                    { label: "Subject line written", done: topic.trim().length > 3, hint: "Keep it short and specific" },
+                                    { label: "Email body written", done: coreMessage.replace(/<[^>]*>/g, "").trim().length > 30, hint: "Write at least a few sentences" },
+                                ].map((check) => (
+                                    <div key={check.label} className="flex items-start gap-2.5">
+                                        <div className={cn(
+                                            "mt-0.5 w-4 h-4 rounded-full flex items-center justify-center shrink-0 transition-all",
+                                            check.done ? "bg-emerald-500" : "border-2 border-slate-200"
+                                        )}>
+                                            {check.done && (
+                                                <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            )}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className={cn("text-xs leading-tight transition-colors", check.done ? "text-slate-700 font-medium" : "text-slate-400")}>
+                                                {check.label}
+                                            </p>
+                                            {!check.done && (
+                                                <p className="text-[10px] text-slate-300 mt-0.5">{check.hint}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Divider */}
+                            <div className="border-t border-slate-100" />
+
+                            {/* Audience count */}
                             <div>
-                                <p className="text-xs font-medium text-slate-500 mb-2">Audience Size</p>
-                                <div className="flex items-end gap-3">
-                                    <span className="text-2xl font-semibold tracking-tight text-slate-900">{audienceSources.length === 0 || !selectedType ? "-" : loadingAudience ? <RefreshCw className="w-5 h-5 animate-spin text-slate-300" /> : audienceData.count}</span>
+                                <p className="text-xs font-medium text-slate-500 mb-1">Audience Size</p>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-2xl font-semibold tracking-tight text-slate-900">
+                                        {audienceSources.length === 0 || !selectedType ? "—" : loadingAudience ? <RefreshCw className="w-5 h-5 animate-spin text-slate-300" /> : audienceData.count}
+                                    </span>
+                                    {audienceSources.length > 0 && selectedType && !loadingAudience && audienceData.count > 0 && (
+                                        <button onClick={() => { fetchTargetClients(); setShowOversightModal(true); }} className="text-xs font-medium text-blue-600 hover:text-blue-700">
+                                            View/Edit List
+                                        </button>
+                                    )}
                                 </div>
                                 {audienceSources.length > 0 && selectedType && !loadingAudience && audienceData.count > 0 && (
-                                    <p className="mt-2 text-xs text-slate-600 flex items-center justify-between">
-                                        <span>Selected recipients: <span className="font-semibold">{selectedRecipientsCount}</span></span>
-                                        <button onClick={() => { fetchTargetClients(); setShowOversightModal(true); }} className="text-blue-600 hover:text-blue-700 font-medium text-xs">View/Edit List</button>
+                                    <p className="text-xs text-slate-400 mt-0.5">
+                                        {selectedRecipientsCount} selected
+                                        {excludedClientIds.length > 0 && <span className="text-amber-500"> · {excludedClientIds.length} excluded</span>}
                                     </p>
                                 )}
                             </div>
-                            <button onClick={() => handleGenerateSample()} disabled={!isReady || isGenerating || audienceData.count === 0} className="w-full bg-blue-600 text-white py-3.5 px-4 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-all flex items-center justify-center gap-3 shadow-md disabled:opacity-40 group">
-                                {isGenerating ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <>Generate Draft<Zap className="w-4 h-4" /></>}
+
+                            {/* Generate button */}
+                            <button
+                                onClick={() => handleGenerateSample()}
+                                disabled={!isReady || isGenerating || audienceData.count === 0}
+                                className={cn(
+                                    "w-full py-3.5 px-4 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2.5 shadow-sm",
+                                    isReady && audienceData.count > 0
+                                        ? "bg-blue-600 text-white hover:bg-blue-700 shadow-md"
+                                        : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                )}
+                            >
+                                {isGenerating ? (
+                                    <><RefreshCcw className="w-4 h-4 animate-spin" /> Generating…</>
+                                ) : (
+                                    <><Zap className="w-4 h-4" /> Generate Draft</>
+                                )}
                             </button>
+
+                            {/* Explain what's missing */}
+                            {!isReady && !isGenerating && (
+                                <p className="text-[11px] text-slate-400 text-center -mt-1">
+                                    Complete {missingLabels.length === 1 ? `"${missingLabels[0]}"` : `${missingLabels.length} steps`} above to unlock
+                                </p>
+                            )}
+                            {isReady && audienceData.count === 0 && !loadingAudience && !isGenerating && (
+                                <p className="text-[11px] text-amber-500 text-center -mt-1">
+                                    No matching clients found for this selection
+                                </p>
+                            )}
                         </div>
                     </div>
                 </div>
