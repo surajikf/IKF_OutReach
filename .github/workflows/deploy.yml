@@ -1,67 +1,54 @@
-name: Deploy Outreach App
+name: Auto Deploy to On-Premises Server
 
 on:
   push:
     branches:
       - main
 
+env:
+  REPO_PATH: /var/www/apps/outreach
+  APP_USER: ikf-support
+  APP_GROUP: www-data
+  NODE_OPTIONS: "--max-old-space-size=2048"
+
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 15
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Sync Project Files
-        run: |
-          sudo rsync -av \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='.env' \
-            --exclude='node_modules' \
-            --exclude='.next' \
-            ./ /var/www/apps/outreach/
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-      - name: Set Permissions
+      - name: Adjust ownership and permissions
         run: |
-          sudo chown -R ikf-support:www-data /var/www/apps/outreach
-          sudo chmod -R 775 /var/www/apps/outreach
+          echo "Setting ownership to $APP_USER:$APP_GROUP..."
+          sudo chown -R $APP_USER:$APP_GROUP $REPO_PATH
+          sudo chmod -R u+rwX $REPO_PATH/backend/.next || true
+          sudo chmod -R u+rwX $REPO_PATH/frontend/.next || true
 
-      - name: Install Dependencies
+      - name: Pull latest code
         run: |
-          cd /var/www/apps/outreach
-          npm install
-
-      - name: Generate Prisma Client
-        run: |
-          cd /var/www/apps/outreach
-          npx prisma generate
+          cd $REPO_PATH
+          git fetch origin main
+          git reset --hard origin/main
 
       - name: Build Application
         run: |
-          cd /var/www/apps/outreach
-
-          export $(grep -v '^#' .env | xargs)
-
+          cd $REPO_PATH
+          npm install
+          npx prisma generate
           npm run build
 
-      - name: Copy Static Files
+      - name: Restart PM2 processes
         run: |
-          cd /var/www/apps/outreach
-
-          mkdir -p .next/standalone/.next
-
-          cp -r .next/static .next/standalone/.next/
-
-          cp -r public .next/standalone/
-
-      - name: Restart PM2
-        run: |
-          cd /var/www/apps/outreach
-
-          pm2 restart outreach --update-env
-
-      - name: Save PM2
-        run: |
-          pm2 save
+          cd $REPO_PATH
+          pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js
+          echo "Deployment completed successfully!"
