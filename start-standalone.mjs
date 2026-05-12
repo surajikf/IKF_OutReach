@@ -33,7 +33,7 @@ for (const envFile of [
 }
 
 const child = spawn(process.execPath, [serverEntrypoint], {
-  cwd: workspaceDir,
+  cwd: dirname(serverEntrypoint),
   stdio: "inherit",
   env: {
     ...process.env,
