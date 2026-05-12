@@ -148,7 +148,10 @@ async function runCampaignGenerate(job: JobRow) {
     serviceFilters = [],
     serviceLogic = "OR",
     sampleClientId,
+    _userId,
   } = payload as any;
+
+  const jobUserId: string | null = _userId ? String(_userId) : null;
 
   const resolvedSources: Array<"INVOICE_SYSTEM" | "ZOHO_BIGIN" | "GMAIL"> =
     Array.isArray(audienceSources) && audienceSources.length > 0
@@ -468,6 +471,7 @@ async function runCampaignGenerate(job: JobRow) {
           campaignType: campaignData.campaignType,
           campaignTopic: campaignData.campaignTopic,
           generatedOutput: campaignData.generatedOutput,
+          ...(jobUserId && { userId: jobUserId }),
         },
       });
 
