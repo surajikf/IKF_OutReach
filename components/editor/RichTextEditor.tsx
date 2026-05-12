@@ -484,7 +484,7 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
                             onClick={() => setShowMagicMenu(!showMagicMenu)}
                             disabled={isRefining}
                             className={cn(
-                                "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                                "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all",
                                 isRefining ? "bg-indigo-600 text-white animate-pulse" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white"
                             )}
                         >
@@ -526,7 +526,7 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
                     <div className="relative">
                         <button
                             onClick={() => setShowVarMenu(!showVarMenu)}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-blue-600 hover:text-white transition-all"
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-slate-100 text-slate-600 hover:bg-blue-600 hover:text-white transition-all"
                         >
                             <Variable className="w-3 h-3" />
                             Add Data
@@ -553,7 +553,7 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
                     <button
                         onClick={() => setIsLivePreview(!isLivePreview)}
                         className={cn(
-                            "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                            "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all",
                             isLivePreview ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700"
                         )}
                     >

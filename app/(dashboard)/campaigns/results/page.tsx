@@ -865,11 +865,11 @@ function CampaignResultsContent() {
                                             <div className="flex items-center justify-between gap-3">
                                                 <div className="flex items-center gap-2 min-w-0">
                                                     <div className={cn("w-1.5 h-1.5 rounded-full", activeIndex === originalIndex ? "bg-blue-600" : "bg-slate-300")} />
-                                                    <h4 className={cn("text-[9px] font-bold uppercase tracking-wider truncate transition-colors", activeIndex === originalIndex ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700")}>
+                                                    <h4 className={cn("text-[11px] font-medium truncate transition-colors", activeIndex === originalIndex ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700")}>
                                                         {c.client?.clientName}
                                                     </h4>
                                                 </div>
-                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full border border-slate-100 bg-slate-50 text-slate-300 uppercase tracking-tighter shrink-0">
+                                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-slate-100 bg-slate-50 text-slate-400 shrink-0">
                                                     {c.campaignType}
                                                 </span>
                                             </div>
@@ -947,8 +947,8 @@ function CampaignResultsContent() {
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center justify-between mb-1">
-                                                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 truncate">{c.client?.clientName}</h4>
-                                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{c.campaignType}</span>
+                                                        <h4 className="text-[11px] font-medium text-slate-900 truncate">{c.client?.clientName}</h4>
+                                                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{c.campaignType}</span>
                                                     </div>
                                                     <p className="text-xs text-slate-500 line-clamp-1">{c.content?.subject}</p>
                                                 </div>

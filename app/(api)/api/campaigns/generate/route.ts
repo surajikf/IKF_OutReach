@@ -53,6 +53,7 @@ const generateCampaignSchema = z.object({
     serviceLogic: z.enum(["AND", "OR"]).optional().default("OR"),
     excludedClientIds: z.array(z.string()).optional().default([]),
     sampleClientId: z.string().optional(),
+    singleClientId: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -74,6 +75,43 @@ export async function POST(request: Request) {
         // Fast UX: batch generation runs in background as a job.
         // Keep `sampleOnly` synchronous so the UI can open the refinement screen immediately.
         const payload = parsed.data;
+
+        // Single-client fast path: save already-edited content directly, no AI, no job queue.
+        if (payload.singleClientId && payload.styleGuide) {
+            const client = await prisma.client.findFirst({
+                where: { id: payload.singleClientId, ...(scopedUserId && { userId: scopedUserId }) },
+                select: { id: true, clientName: true, email: true, contactPerson: true, industry: true, clientAddedOn: true, invoiceServiceNames: true, relationshipLevel: true, lastInvoiceDate: true },
+            });
+            if (!client) return error("NOT_FOUND", "Client not found", { status: 404 });
+
+            const body = normalizeEmailBodyHtml(replaceVariables(payload.styleGuide.body, client));
+            const subject = replaceVariables(payload.styleGuide.subject, client);
+            const generatedOutput = JSON.stringify({ subject, body, leadStrength: 75, spamRisk: 5 });
+
+            const campaign = await (prisma as any).campaignHistory.create({
+                data: {
+                    clientId: client.id,
+                    campaignType: payload.type,
+                    campaignTopic: payload.topic,
+                    generatedOutput,
+                    userId: sessionUser?.id ?? null,
+                },
+            });
+
+            // Create a pre-SUCCEEDED job shell so the results page polling works
+            const job = await (prisma as any).job.create({
+                data: {
+                    type: "CAMPAIGN_GENERATE",
+                    status: "SUCCEEDED",
+                    progress: 100,
+                    payload: { singleClientId: payload.singleClientId, _userId: sessionUser?.id ?? null },
+                    result: { count: 1, singleCampaignId: campaign.id },
+                },
+            });
+
+            return ok({ jobId: job.id }, { status: 202 });
+        }
+
         if (!payload.sampleOnly) {
             const job = await (prisma as any).job.create({
                 data: {

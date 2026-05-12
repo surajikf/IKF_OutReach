@@ -632,6 +632,57 @@ export default function CampaignGenerator() {
         }
     };
 
+    const [isSavingSingle, setIsSavingSingle] = useState(false);
+
+    const handleGenerateSingleClient = async () => {
+        if (!sampleData?.clientId) {
+            toast.error("No sample client selected.");
+            return;
+        }
+        if ((editedSubject || "").trim().length < 4) {
+            toast.error("Subject is too short.");
+            return;
+        }
+        if ((editedBody || "").replace(/<[^>]*>/g, "").trim().length < 30) {
+            toast.error("Email body is too short.");
+            return;
+        }
+        setIsSavingSingle(true);
+        try {
+            const res = await fetch(apiPath("/campaigns/generate"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    audienceSources,
+                    type: selectedType,
+                    topic,
+                    coreMessage,
+                    cta,
+                    styleGuide: { subject: editedSubject, body: editedBody },
+                    serviceFilters: selectedServices,
+                    serviceLogic,
+                    excludedClientIds: [],
+                    singleClientId: sampleData.clientId,
+                }),
+            });
+            const data = await res.json().catch(() => null);
+            if (res.ok && data?.success) {
+                notifyAiRoutingStatus(data.data?.aiRouting);
+                const jobId = data?.data?.jobId;
+                writeCampaignSession({ activeJobId: jobId || null });
+                window.location.href = jobId
+                    ? `/campaigns/results?jobId=${encodeURIComponent(jobId)}`
+                    : "/campaigns/results";
+            } else {
+                toast.error(data?.error?.message || "Failed to save campaign.");
+                setIsSavingSingle(false);
+            }
+        } catch {
+            toast.error("Request failed.");
+            setIsSavingSingle(false);
+        }
+    };
+
     const handleGenerateAll = async () => {
         const plain = editedBody.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
         if (audienceSources.length === 0) {
@@ -899,12 +950,25 @@ export default function CampaignGenerator() {
                                 </div>
                             </div>
 
-                            <div className="pt-6">
-                                <button onClick={handleGenerateAll} className="w-full bg-slate-900 text-white py-4 px-4 rounded-xl text-sm font-semibold hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg group">
-                                    Generate All
-                                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                            <div className="pt-6 space-y-3">
+                                <button
+                                    onClick={handleGenerateSingleClient}
+                                    disabled={isSavingSingle || isGenerating}
+                                    className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl text-sm font-semibold hover:bg-blue-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
+                                >
+                                    {isSavingSingle ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                    {isSavingSingle ? "Saving…" : `Send to ${sampleData?.clientName?.split(" ")[0] || "This Client"} Only`}
                                 </button>
-                                <p className="text-xs text-center text-slate-500 mt-4 font-medium">This will generate emails for all {selectedRecipientsCount} matching clients.</p>
+                                <button
+                                    onClick={handleGenerateAll}
+                                    disabled={isSavingSingle || isGenerating}
+                                    className="w-full bg-slate-900 text-white py-3 px-4 rounded-xl text-sm font-semibold hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg group disabled:opacity-50"
+                                >
+                                    {isGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
+                                    Generate All
+                                    {!isGenerating && <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
+                                </button>
+                                <p className="text-xs text-center text-slate-400 mt-1">Generate All creates emails for all {selectedRecipientsCount} matching clients.</p>
                             </div>
                         </div>
                         <div className="bg-amber-50 border border-amber-100 rounded-xl p-5 flex gap-4">
