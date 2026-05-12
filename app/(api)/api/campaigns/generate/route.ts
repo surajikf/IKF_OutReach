@@ -80,7 +80,7 @@ export async function POST(request: Request) {
                     type: "CAMPAIGN_GENERATE",
                     status: "QUEUED",
                     progress: 0,
-                    payload,
+                    payload: { ...payload, _userId: sessionUser?.id ?? null },
                 },
             });
 

@@ -35,7 +35,8 @@
       "Bash(set DIRECT_URL=postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres)",
       "Bash(set DATABASE_URL=postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres)",
       "PowerShell(cd \"e:\\\\Cursor\\\\FINAL\\\\IKF_OutReach\"; $env:DATABASE_URL=\"postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres\"; $env:DIRECT_URL=\"postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres\"; npx prisma migrate dev --name add_user_scoping_to_client_and_campaign 2>&1)",
-      "PowerShell(cd \"e:\\\\Cursor\\\\FINAL\\\\IKF_OutReach\"; $env:DATABASE_URL=\"postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres\"; $env:DIRECT_URL=\"postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres\"; npx prisma db push 2>&1)"
+      "PowerShell(cd \"e:\\\\Cursor\\\\FINAL\\\\IKF_OutReach\"; $env:DATABASE_URL=\"postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres\"; $env:DIRECT_URL=\"postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres\"; npx prisma db push 2>&1)",
+      "Bash(xargs grep *)"
     ],
     "additionalDirectories": [
       "e:\\Cursor\\FINAL\\IKF_OutReach\\app\\(dashboard)\\campaigns\\list"
