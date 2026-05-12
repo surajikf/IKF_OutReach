@@ -693,10 +693,10 @@ export default function ImportIntegrationsPage() {
             <header className="px-2">
                 <div className="flex items-center gap-3 text-blue-600 mb-2">
                     <DownloadCloud className="w-5 h-5" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Data Import</span>
+                    <span className="text-xs font-medium text-slate-500">Data Import</span>
                 </div>
-                <h2 className="text-3xl font-bold tracking-tight text-slate-900">Integrations</h2>
-                <p className="text-slate-500 font-medium text-sm mt-1">Connect external data channels and synchronize your client base.</p>
+                <h2 className="text-xl font-semibold tracking-tight text-slate-900">Integrations</h2>
+                <p className="text-sm text-slate-500 mt-1">Connect external data channels and synchronize your client base.</p>
             </header>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -713,9 +713,9 @@ export default function ImportIntegrationsPage() {
                                 <FileText className="w-6 h-6 text-blue-600" />
                             </div>
                             <div className="flex flex-col items-end">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Main Source</span>
+                                <span className="text-[10px] font-medium text-slate-400">Main Source</span>
                                 <div className={cn(
-                                    "mt-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter",
+                                    "mt-1 px-2 py-0.5 rounded-full text-[9px] font-medium",
                                     syncStatus.invoice === "success" ? "bg-emerald-100 text-emerald-600" : 
                                     syncStatus.invoice === "error" ? "bg-red-100 text-red-600" :
                                     syncStatus.invoice === "warning" ? "bg-amber-100 text-amber-600" : "bg-slate-100 text-slate-500"
@@ -735,8 +735,8 @@ export default function ImportIntegrationsPage() {
                                 <div className="flex items-center gap-2">
                                     <RefreshCw className={cn("w-3.5 h-3.5 text-slate-400", syncStatus.invoice === "syncing" && "animate-spin")} />
                                     <div className="flex flex-col">
-                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Last Pulse</span>
-                                        <span className="text-[9px] text-blue-600 font-black uppercase tracking-widest mt-0.5">
+                                        <span className="text-[10px] font-medium text-slate-500">Last Pulse</span>
+                                        <span className="text-[9px] text-blue-600 font-medium mt-0.5">
                                             {globalSettings?.invoiceStats?.count || 0} Clients Synced
                                         </span>
                                     </div>
@@ -754,7 +754,7 @@ export default function ImportIntegrationsPage() {
                             <button 
                                 onClick={handleInvoiceSync}
                                 disabled={syncStatus.invoice === "syncing"}
-                                className="w-full h-12 bg-blue-600 text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 transition-all active:scale-[0.98] shadow-lg shadow-blue-600/20 flex items-center justify-center gap-3 disabled:opacity-50"
+                                className="w-full h-12 bg-blue-600 text-white rounded-2xl text-[10px] font-semibold hover:bg-blue-700 transition-all active:scale-[0.98] shadow-lg shadow-blue-600/20 flex items-center justify-center gap-3 disabled:opacity-50"
                             >
                                 {syncStatus.invoice === "syncing" ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                                 Sync Now
@@ -776,9 +776,9 @@ export default function ImportIntegrationsPage() {
                                 <Cloud className="w-6 h-6 text-orange-600" />
                             </div>
                             <div className="flex flex-col items-end">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pipeline</span>
+                                <span className="text-[10px] font-medium text-slate-400">Pipeline</span>
                                 <div className={cn(
-                                    "mt-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter",
+                                    "mt-1 px-2 py-0.5 rounded-full text-[9px] font-medium",
                                     syncStatus.zoho === "success" ? "bg-emerald-100 text-emerald-600" : 
                                     syncStatus.zoho === "error" ? "bg-red-100 text-red-600" :
                                     syncStatus.zoho === "warning" ? "bg-amber-100 text-amber-600" : "bg-slate-100 text-slate-500"
@@ -798,8 +798,8 @@ export default function ImportIntegrationsPage() {
                                 <div className="flex items-center gap-2">
                                     <RefreshCw className={cn("w-3.5 h-3.5 text-slate-400", syncStatus.zoho === "syncing" && "animate-spin")} />
                                     <div className="flex flex-col">
-                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Last Pulse</span>
-                                        <span className="text-[9px] text-orange-600 font-black uppercase tracking-widest mt-0.5">
+                                        <span className="text-[10px] font-medium text-slate-500">Last Pulse</span>
+                                        <span className="text-[9px] text-orange-600 font-medium mt-0.5">
                                             {zohoClientCount} Clients Synced
                                         </span>
                                     </div>
@@ -810,7 +810,7 @@ export default function ImportIntegrationsPage() {
                             <div className="grid grid-cols-2 gap-3">
                                 <button 
                                     onClick={() => setIsZohoModalOpen(true)}
-                                    className="h-12 bg-white border border-slate-200 text-slate-600 rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                                    className="h-12 bg-white border border-slate-200 text-slate-600 rounded-2xl text-[10px] font-semibold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
                                 >
                                     <Database className="w-4 h-4" />
                                     Config
@@ -818,7 +818,7 @@ export default function ImportIntegrationsPage() {
                                 <button 
                                     onClick={handleZohoSync}
                                     disabled={syncStatus.zoho === "syncing" || !zohoConfig.hasRefreshToken}
-                                    className="h-12 bg-orange-600 text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-orange-700 transition-all active:scale-[0.98] shadow-lg shadow-orange-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                                    className="h-12 bg-orange-600 text-white rounded-2xl text-[10px] font-semibold hover:bg-orange-700 transition-all active:scale-[0.98] shadow-lg shadow-orange-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
                                 >
                                     {syncStatus.zoho === "syncing" ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                                     Sync
@@ -838,8 +838,8 @@ export default function ImportIntegrationsPage() {
                                 <Mail className="w-6 h-6 text-red-600" />
                             </div>
                             <div className="flex flex-col items-end">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Email Channel</span>
-                                <div className="mt-1 px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full text-[9px] font-bold uppercase tracking-tighter">
+                                <span className="text-[10px] font-medium text-slate-400">Email Channel</span>
+                                <div className="mt-1 px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full text-[9px] font-medium">
                                     {gmailAccounts.length} Connected
                                 </div>
                             </div>
@@ -855,8 +855,8 @@ export default function ImportIntegrationsPage() {
                                 <div className="flex items-center gap-2">
                                     <RefreshCw className={cn("w-3.5 h-3.5 text-slate-400", Object.values(syncStatus.gmail).some(s => s === "syncing") && "animate-spin")} />
                                     <div className="flex flex-col">
-                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Last Pulse</span>
-                                        <span className="text-[9px] text-red-600 font-black uppercase tracking-widest mt-0.5">
+                                        <span className="text-[10px] font-medium text-slate-500">Last Pulse</span>
+                                        <span className="text-[9px] text-red-600 font-medium mt-0.5">
                                             {globalSettings?.gmailStats?.count || 0} Clients Synced
                                         </span>
                                     </div>
@@ -888,11 +888,11 @@ export default function ImportIntegrationsPage() {
                                                 )} />
                                             </div>
                                             <div className="flex flex-col gap-1 ml-7">
-                                                <span className="text-[10px] text-slate-900 font-black lowercase truncate tracking-tight">{acc.email}</span>
+                                                <span className="text-[10px] text-slate-900 font-medium lowercase truncate">{acc.email}</span>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">Connected Node</span>
+                                                    <span className="text-[9px] text-slate-400 font-medium">Connected Node</span>
                                                     <div className="w-1 h-1 rounded-full bg-slate-200" />
-                                                    <span className="text-[9px] text-blue-600 font-black uppercase tracking-widest">
+                                                    <span className="text-[9px] text-blue-600 font-medium">
                                                         {acc.count || 0} Clients Synced
                                                     </span>
                                                 </div>
@@ -906,7 +906,7 @@ export default function ImportIntegrationsPage() {
                                         <div className="flex flex-col items-center gap-1">
                                             <button
                                                 onClick={() => openProfileModal(acc)}
-                                                className="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-blue-600"
+                                                className="text-[9px] font-medium text-slate-500 hover:text-blue-600"
                                             >
                                                 Edit Filters
                                             </button>
@@ -921,13 +921,13 @@ export default function ImportIntegrationsPage() {
                                                 )}>
                                                     {syncStatus.gmail[acc.id] === "syncing" ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 group-hover/btn:rotate-180 transition-transform duration-500" />}
                                                 </div>
-                                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 group-hover/btn:text-red-500">Sync Again</span>
+                                                <span className="text-[9px] font-medium text-slate-400 group-hover/btn:text-red-500">Sync Again</span>
                                             </button>
                                         </div>
                                     </div>
                                     {insight && insight.skippedAutomatedTotal > 0 && (
                                         <div className="p-3 rounded-xl border border-amber-200 bg-amber-50">
-                                            <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">
+                                            <p className="text-[10px] font-medium text-amber-700">
                                                 Skipped Emails ({insight.skippedAutomatedTotal}) for {acc.accountName || acc.email}
                                             </p>
                                             <p className="text-[10px] text-amber-700 mt-1">
@@ -948,14 +948,14 @@ export default function ImportIntegrationsPage() {
                                 })}
                                 {gmailAccounts.length === 0 && (
                                     <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">No accounts linked</p>
+                                        <p className="text-[10px] text-slate-400 font-medium italic">No accounts linked</p>
                                     </div>
                                 )}
                             </div>
 
                             <button 
                                 onClick={() => setIsGmailModalOpen(true)}
-                                className="w-full h-12 bg-white border-2 border-slate-100 text-slate-600 rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 hover:border-red-100 hover:text-red-600 transition-all active:scale-[0.98] flex items-center justify-center gap-3"
+                                className="w-full h-12 bg-white border-2 border-slate-100 text-slate-600 rounded-2xl text-[10px] font-semibold hover:bg-slate-50 hover:border-red-100 hover:text-red-600 transition-all active:scale-[0.98] flex items-center justify-center gap-3"
                             >
                                 <Plus className="w-4 h-4" />
                                 Connect Account
@@ -973,9 +973,9 @@ export default function ImportIntegrationsPage() {
                                 <User className="w-6 h-6 text-emerald-600" />
                             </div>
                             <div className="flex flex-col items-end">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Directory Channel</span>
+                                <span className="text-[10px] font-medium text-slate-400">Directory Channel</span>
                                 <div className={cn(
-                                    "mt-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tighter",
+                                    "mt-1 px-2 py-0.5 rounded-full text-[9px] font-medium",
                                     googleContactsConnected ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
                                 )}>
                                     {googleContactsConnected ? "Connected" : "Not Linked"}
@@ -993,8 +993,8 @@ export default function ImportIntegrationsPage() {
                                 <div className="flex items-center gap-2">
                                     <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
                                     <div className="flex flex-col">
-                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Last Pulse</span>
-                                        <span className="text-[9px] text-emerald-600 font-black uppercase tracking-widest mt-0.5">
+                                        <span className="text-[10px] font-medium text-slate-500">Last Pulse</span>
+                                        <span className="text-[9px] text-emerald-600 font-medium mt-0.5">
                                             {googleContactsConnected ? (globalSettings?.gmailStats?.count || 0) : 0} Contacts Synced
                                         </span>
                                     </div>
@@ -1008,7 +1008,7 @@ export default function ImportIntegrationsPage() {
 
                             <button
                                 onClick={handleConnectGoogleContacts}
-                                className="w-full h-12 bg-emerald-600 text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-[0.98] shadow-lg shadow-emerald-600/10 flex items-center justify-center gap-3"
+                                className="w-full h-12 bg-emerald-600 text-white rounded-2xl text-[10px] font-semibold hover:bg-emerald-700 transition-all active:scale-[0.98] shadow-lg shadow-emerald-600/10 flex items-center justify-center gap-3"
                             >
                                 <Plus className="w-4 h-4" />
                                 {googleContactsConnected ? "Re-auth Directory" : "Connect Contacts"}
@@ -1018,7 +1018,7 @@ export default function ImportIntegrationsPage() {
                                 <button
                                     onClick={handleGoogleContactsSync}
                                     disabled={Boolean(!googleContactsAccountId) || syncStatus.gmail[googleContactsAccountId!] === "syncing"}
-                                    className="w-full h-10 bg-white border border-emerald-200 text-emerald-700 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-50 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                    className="w-full h-10 bg-white border border-emerald-200 text-emerald-700 rounded-xl text-[10px] font-semibold hover:bg-emerald-50 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                                 >
                                     <RefreshCw className={cn("w-3.5 h-3.5", googleContactsAccountId && syncStatus.gmail[googleContactsAccountId] === "syncing" && "animate-spin")} />
                                     {googleContactsAccountId && syncStatus.gmail[googleContactsAccountId] === "syncing" ? "Syncing..." : "Run Directory Sync"}
@@ -1290,7 +1290,7 @@ export default function ImportIntegrationsPage() {
                                                     )}>
                                                         <div className="flex flex-col">
                                                             <span className="text-xs font-semibold text-slate-700">{field.field_label}</span>
-                                                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter opacity-70 group-hover:text-orange-500 transition-colors">{field.module}.{field.api_name}</span>
+                                                            <span className="text-[9px] text-slate-400 font-medium opacity-70 group-hover:text-orange-500 transition-colors">{field.module}.{field.api_name}</span>
                                                         </div>
                                                         <button 
                                                             onClick={() => {
@@ -1300,7 +1300,7 @@ export default function ImportIntegrationsPage() {
                                                                 setZohoExclusions(newExclusions);
                                                             }}
                                                             className={cn(
-                                                                "h-6 px-2.5 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-all duration-300 border flex items-center justify-center min-w-[64px]",
+                                                                "h-6 px-2.5 rounded-lg text-[9px] font-semibold transition-all duration-300 border flex items-center justify-center min-w-[64px]",
                                                                 isExcluded ? "bg-slate-100 text-slate-500 border-slate-200" : "bg-orange-50 text-orange-600 border-orange-100 hover:bg-orange-600 hover:text-white hover:border-orange-600"
                                                             )}
                                                         >
@@ -1356,7 +1356,7 @@ export default function ImportIntegrationsPage() {
                         </div>
                         <div className="p-6 space-y-5">
                             <div>
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Account Label</label>
+                                <label className="text-[10px] font-medium text-slate-400 block mb-2">Account Label</label>
                                 <input 
                                     type="text" 
                                     value={gmailLabel} 
@@ -1368,7 +1368,7 @@ export default function ImportIntegrationsPage() {
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">What do you want to do?</label>
+                                <label className="text-[10px] font-medium text-slate-400 block mb-2">What do you want to do?</label>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                     {[
                                         { id: "send", title: "Send Emails", detail: "Send emails from this Gmail account only." },
@@ -1398,7 +1398,7 @@ export default function ImportIntegrationsPage() {
                                     <p className="text-[11px] font-bold text-slate-800">Contact Sync Options</p>
 
                                     <div>
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Source folders</label>
+                                        <label className="text-[10px] font-medium text-slate-500 block mb-2">Source folders</label>
                                         <div className="flex flex-wrap gap-2">
                                             {(["INBOX", "SENT", "LABEL"] as GmailSyncFolder[]).map((folder) => (
                                                 <button
@@ -1413,7 +1413,7 @@ export default function ImportIntegrationsPage() {
                                                         }))
                                                     }
                                                     className={cn(
-                                                        "px-3 py-1.5 rounded-lg text-[10px] font-bold border",
+                                                        "px-3 py-1.5 rounded-lg text-[10px] font-medium border",
                                                         gmailSyncProfile.sourceFolders.includes(folder)
                                                             ? "bg-blue-50 text-blue-700 border-blue-200"
                                                             : "bg-white text-slate-500 border-slate-200"
@@ -1427,7 +1427,7 @@ export default function ImportIntegrationsPage() {
 
                                     {gmailSyncProfile.sourceFolders.includes("LABEL") && (
                                         <div>
-                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Custom labels (comma separated)</label>
+                                            <label className="text-[10px] font-medium text-slate-500 block mb-2">Custom labels (comma separated)</label>
                                             <input
                                                 type="text"
                                                 value={gmailSyncProfile.customLabelsText}
@@ -1439,7 +1439,7 @@ export default function ImportIntegrationsPage() {
                                     )}
 
                                     <div>
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Extract from</label>
+                                        <label className="text-[10px] font-medium text-slate-500 block mb-2">Extract from</label>
                                         <div className="flex flex-wrap gap-2">
                                             {(["from", "to", "cc", "bcc"] as GmailHeader[]).map((header) => (
                                                 <button
@@ -1454,7 +1454,7 @@ export default function ImportIntegrationsPage() {
                                                         }))
                                                     }
                                                     className={cn(
-                                                        "px-3 py-1.5 rounded-lg text-[10px] font-bold border uppercase",
+                                                        "px-3 py-1.5 rounded-lg text-[10px] font-medium border uppercase",
                                                         gmailSyncProfile.extractHeaders.includes(header)
                                                             ? "bg-blue-50 text-blue-700 border-blue-200"
                                                             : "bg-white text-slate-500 border-slate-200"
@@ -1468,7 +1468,7 @@ export default function ImportIntegrationsPage() {
 
                                     <div className="grid sm:grid-cols-2 gap-3">
                                         <div>
-                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Block domains</label>
+                                            <label className="text-[10px] font-medium text-slate-500 block mb-2">Block domains</label>
                                             <input
                                                 type="text"
                                                 value={gmailSyncProfile.excludedDomainsText}
@@ -1479,7 +1479,7 @@ export default function ImportIntegrationsPage() {
                                             <p className="mt-1 text-[10px] text-slate-500">Skips contacts whose email domain matches these entries.</p>
                                         </div>
                                         <div>
-                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Block keywords</label>
+                                            <label className="text-[10px] font-medium text-slate-500 block mb-2">Block keywords</label>
                                             <input
                                                 type="text"
                                                 value={gmailSyncProfile.excludedKeywordsText}
@@ -1538,7 +1538,7 @@ export default function ImportIntegrationsPage() {
                             <p className="text-[11px] text-slate-600 font-medium">{activeGmailAccountForProfile.name} ({activeGmailAccountForProfile.email})</p>
                             <div className="space-y-3 border border-slate-100 rounded-2xl p-4 bg-slate-50/50">
                                 <div>
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Source folders</label>
+                                    <label className="text-[10px] font-medium text-slate-500 block mb-2">Source folders</label>
                                     <div className="flex flex-wrap gap-2">
                                         {(["INBOX", "SENT", "LABEL"] as GmailSyncFolder[]).map((folder) => (
                                             <button
@@ -1553,7 +1553,7 @@ export default function ImportIntegrationsPage() {
                                                     }))
                                                 }
                                                 className={cn(
-                                                    "px-3 py-1.5 rounded-lg text-[10px] font-bold border",
+                                                    "px-3 py-1.5 rounded-lg text-[10px] font-medium border",
                                                     gmailSyncProfile.sourceFolders.includes(folder)
                                                         ? "bg-blue-50 text-blue-700 border-blue-200"
                                                         : "bg-white text-slate-500 border-slate-200"
@@ -1566,7 +1566,7 @@ export default function ImportIntegrationsPage() {
                                 </div>
                                 {gmailSyncProfile.sourceFolders.includes("LABEL") && (
                                     <div>
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Custom labels</label>
+                                        <label className="text-[10px] font-medium text-slate-500 block mb-2">Custom labels</label>
                                         <input
                                             type="text"
                                             value={gmailSyncProfile.customLabelsText}
@@ -1576,7 +1576,7 @@ export default function ImportIntegrationsPage() {
                                     </div>
                                 )}
                                 <div>
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Extract from</label>
+                                    <label className="text-[10px] font-medium text-slate-500 block mb-2">Extract from</label>
                                     <div className="flex flex-wrap gap-2">
                                         {(["from", "to", "cc", "bcc"] as GmailHeader[]).map((header) => (
                                             <button
@@ -1591,7 +1591,7 @@ export default function ImportIntegrationsPage() {
                                                     }))
                                                 }
                                                 className={cn(
-                                                    "px-3 py-1.5 rounded-lg text-[10px] font-bold border uppercase",
+                                                    "px-3 py-1.5 rounded-lg text-[10px] font-medium border uppercase",
                                                     gmailSyncProfile.extractHeaders.includes(header)
                                                         ? "bg-blue-50 text-blue-700 border-blue-200"
                                                         : "bg-white text-slate-500 border-slate-200"
@@ -1604,7 +1604,7 @@ export default function ImportIntegrationsPage() {
                                 </div>
                                 <div className="grid sm:grid-cols-2 gap-3">
                                     <div>
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Block domains</label>
+                                        <label className="text-[10px] font-medium text-slate-500 block mb-2">Block domains</label>
                                         <input
                                             type="text"
                                             value={gmailSyncProfile.excludedDomainsText}
@@ -1614,7 +1614,7 @@ export default function ImportIntegrationsPage() {
                                         <p className="mt-1 text-[10px] text-slate-500">Skips contacts whose email domain matches these entries.</p>
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Block keywords</label>
+                                        <label className="text-[10px] font-medium text-slate-500 block mb-2">Block keywords</label>
                                         <input
                                             type="text"
                                             value={gmailSyncProfile.excludedKeywordsText}
@@ -1641,7 +1641,7 @@ export default function ImportIntegrationsPage() {
                                     Include newsletter/alert/transaction emails in normal sync
                                 </label>
                             </div>
-                            <button onClick={saveActiveProfile} className="w-full h-11 bg-slate-900 text-white rounded-2xl text-[11px] font-bold uppercase tracking-[0.2em]">
+                            <button onClick={saveActiveProfile} className="w-full h-11 bg-slate-900 text-white rounded-2xl text-[11px] font-semibold">
                                 Save Filters
                             </button>
                         </div>

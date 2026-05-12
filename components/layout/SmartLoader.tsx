@@ -24,8 +24,8 @@ export function SmartLoader({
             </div>
 
             <div className="space-y-1.5 flex flex-col items-center text-center">
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-[0.2em]">{label}</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">{description}</p>
+                <h3 className="text-sm font-semibold text-slate-900">{label}</h3>
+                <p className="text-[10px] font-medium text-slate-400 animate-pulse">{description}</p>
             </div>
         </div>
     );

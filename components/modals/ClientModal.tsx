@@ -18,13 +18,15 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
         e.preventDefault();
         setFormData(prev => {
             const isSelected = prev.serviceIds.includes(serviceId);
-            if (isSelected) {
-                return { ...prev, serviceIds: prev.serviceIds.filter(id => id !== serviceId) };
-            } else {
-                return { ...prev, serviceIds: [...prev.serviceIds, serviceId] };
-            }
+            return {
+                ...prev,
+                serviceIds: isSelected
+                    ? prev.serviceIds.filter(id => id !== serviceId)
+                    : [...prev.serviceIds, serviceId]
+            };
         });
     };
+
     const [formData, setFormData] = useState({
         clientName: "",
         contactPerson: "",
@@ -49,14 +51,7 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
                     serviceIds: client.services?.map((s: any) => s.id) || []
                 });
             } else {
-                setFormData({
-                    clientName: "",
-                    contactPerson: "",
-                    email: "",
-                    industry: "",
-                    relationshipLevel: "Active",
-                    serviceIds: []
-                });
+                setFormData({ clientName: "", contactPerson: "", email: "", industry: "", relationshipLevel: "Active", serviceIds: [] });
             }
         }
     }, [isOpen, client]);
@@ -73,7 +68,6 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-
         setLoading(true);
         try {
             const url = client ? apiPath(`/clients/${client.id}`) : apiPath("/clients");
@@ -88,7 +82,7 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
                 onSuccess();
                 onClose();
             } else {
-                toast.error(result.error?.message || "A disruption occurred in the matrix. Please verify your inputs.");
+                toast.error(result.error?.message || "Failed to save. Please check your inputs.");
             }
         } catch (err) {
             console.error(err);
@@ -99,125 +93,112 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
 
     if (!isOpen) return null;
 
+    const SectionLabel = ({ icon: Icon, label }: { icon: any; label: string }) => (
+        <div className="flex items-center gap-2 mb-3">
+            <Icon className="w-3.5 h-3.5 text-slate-400" />
+            <span className="text-xs font-semibold text-slate-500">{label}</span>
+            <div className="h-px flex-1 bg-slate-100" />
+        </div>
+    );
+
+    const FieldLabel = ({ children }: { children: React.ReactNode }) => (
+        <label className="text-xs font-medium text-slate-500">{children}</label>
+    );
+
+    const inputClass = "w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-50 transition-all";
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-all" onClick={onClose} />
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
 
-            <div className="bg-white w-full max-w-2xl rounded-2xl border border-slate-200 shadow-2xl relative flex flex-col max-h-[95vh] animate-in fade-in zoom-in-95 duration-200">
-                <div className="px-8 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 flex-shrink-0">
+            <div className="bg-white w-full max-w-2xl rounded-xl border border-slate-200 shadow-2xl relative flex flex-col max-h-[95vh] animate-in fade-in zoom-in-95 duration-200">
+                {/* Header */}
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-100">
-                            <Building2 className="w-5 h-5" />
+                        <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center">
+                            <Building2 className="w-4 h-4" />
                         </div>
                         <div>
-                            <h3 className="text-lg font-bold text-slate-900 uppercase tracking-widest">
-                                {client ? "Recalibrate Profile" : "Onboard New Partner"}
+                            <h3 className="text-sm font-semibold text-slate-900">
+                                {client ? "Edit Client" : "Add New Client"}
                             </h3>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Client Portfolio Node</p>
+                            <p className="text-xs text-slate-400">Fill in the details below</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-200/50 rounded-full transition-colors text-slate-400 hover:text-slate-900">
-                        <X className="w-5 h-5" />
+                    <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400">
+                        <X className="w-4 h-4" />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 pt-6 space-y-8 custom-scrollbar">
-                    {/* Identity Section */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <User className="w-3.5 h-3.5 text-blue-600" />
-                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Institutional Identity</h4>
-                            <div className="h-px flex-1 bg-slate-100" />
-                        </div>
-                        
-                        <div className="grid sm:grid-cols-2 gap-5">
+                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {/* Identity */}
+                    <div>
+                        <SectionLabel icon={User} label="Basic Info" />
+                        <div className="grid sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Company / Client Name</label>
+                                <FieldLabel>Company / Client Name</FieldLabel>
                                 <input
                                     required
                                     type="text"
                                     placeholder="e.g., Tata Consultancy Services"
                                     value={formData.clientName}
                                     onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all font-medium"
+                                    className={inputClass}
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Point of Contact</label>
+                                <FieldLabel>Contact Person</FieldLabel>
                                 <input
                                     type="text"
                                     placeholder="e.g., John Doe"
                                     value={formData.contactPerson}
                                     onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all font-medium"
+                                    className={inputClass}
                                 />
                             </div>
                         </div>
                     </div>
 
-                    {/* Communication Architecture */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <Mail className="w-3.5 h-3.5 text-blue-600" />
-                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Communication Hub</h4>
-                            <div className="h-px flex-1 bg-slate-100" />
-                        </div>
-
-                        <div className="space-y-4 bg-slate-50/50 p-5 rounded-2xl border border-slate-200/60">
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Authorized Email List</label>
-                                <textarea
-                                    required
-                                    placeholder="primary@company.com, secondary@company.com"
-                                    value={formData.email}
-                                    onChange={(e) => {
-                                        const newVal = e.target.value;
-                                        setFormData(prev => ({
-                                            ...prev,
-                                            email: newVal
-                                        }));
-                                    }}
-                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all font-medium h-24 resize-none leading-relaxed"
-                                />
-                                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">
-                                    <Hash className="w-3 h-3" />
-                                    Comma-separated for multiple routing
-                                </div>
-                            </div>
-
-
+                    {/* Email */}
+                    <div>
+                        <SectionLabel icon={Mail} label="Email" />
+                        <div className="space-y-1.5">
+                            <FieldLabel>Email Address(es)</FieldLabel>
+                            <textarea
+                                required
+                                placeholder="primary@company.com, secondary@company.com"
+                                value={formData.email}
+                                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                                className={cn(inputClass, "h-20 resize-none")}
+                            />
+                            <p className="text-[11px] text-slate-400">Separate multiple emails with a comma</p>
                         </div>
                     </div>
 
-                    {/* Segmentation & Intelligence */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <Tag className="w-3.5 h-3.5 text-blue-600" />
-                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Project Alignment</h4>
-                            <div className="h-px flex-1 bg-slate-100" />
-                        </div>
-
-                        <div className="grid sm:grid-cols-2 gap-5">
+                    {/* Classification */}
+                    <div>
+                        <SectionLabel icon={Tag} label="Classification" />
+                        <div className="grid sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Industry Sector</label>
+                                <FieldLabel>Industry</FieldLabel>
                                 <select
                                     required
                                     value={formData.industry}
                                     onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium appearance-none cursor-pointer"
+                                    className={inputClass}
                                 >
-                                    <option value="">Select Sector</option>
+                                    <option value="">Select industry</option>
                                     {["Engineering", "Industrial", "Technology", "Retail", "Corporate", "Digital", "Other"].map(i => (
                                         <option key={i} value={i}>{i}</option>
                                     ))}
                                 </select>
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Relationship Status</label>
+                                <FieldLabel>Relationship Status</FieldLabel>
                                 <select
                                     value={formData.relationshipLevel}
                                     onChange={(e) => setFormData({ ...formData, relationshipLevel: e.target.value })}
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 outline-none focus:bg-white focus:border-blue-500 transition-all font-medium appearance-none cursor-pointer"
+                                    className={inputClass}
                                 >
                                     {["Active", "Warm Lead", "Past Client", "Inactive", "Not Active"].map(lvl => (
                                         <option key={lvl} value={lvl}>{lvl}</option>
@@ -225,126 +206,94 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
                                 </select>
                             </div>
                         </div>
+                    </div>
 
-                        <div className="space-y-3">
-                             <div className="flex items-center justify-between px-1">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Technological Footprint</label>
-                                <div className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100 animate-pulse uppercase tracking-wider">
-                                    {formData.serviceIds.length} Linked Services
+                    {/* Services */}
+                    <div>
+                        <div className="flex items-center gap-2 mb-3">
+                            <Tag className="w-3.5 h-3.5 text-slate-400" />
+                            <span className="text-xs font-semibold text-slate-500">Linked Services</span>
+                            <div className="h-px flex-1 bg-slate-100" />
+                            {formData.serviceIds.length > 0 && (
+                                <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                                    {formData.serviceIds.length} selected
+                                </span>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-slate-50 border border-slate-100 p-4 rounded-xl max-h-48 overflow-y-auto">
+                            {services.map((service) => {
+                                const isSelected = formData.serviceIds.includes(service.id);
+                                return (
+                                    <button
+                                        key={service.id}
+                                        type="button"
+                                        onClick={(e) => toggleService(service.id, e)}
+                                        className={cn(
+                                            "flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-all text-left",
+                                            isSelected
+                                                ? "bg-white border-blue-500 text-blue-700 shadow-sm"
+                                                : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"
+                                        )}
+                                    >
+                                        <div className={cn(
+                                            "w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0",
+                                            isSelected ? "bg-blue-600 border-blue-600" : "border-slate-300"
+                                        )}>
+                                            {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3px]" />}
+                                        </div>
+                                        <span className="truncate">{service.serviceName}</span>
+                                    </button>
+                                );
+                            })}
+                            {services.length === 0 && (
+                                <div className="col-span-full py-6 text-center">
+                                    <Loader2 className="w-4 h-4 animate-spin text-slate-300 mx-auto mb-1" />
+                                    <p className="text-xs text-slate-400">Loading services...</p>
                                 </div>
-                            </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 bg-slate-50 border border-slate-100 p-5 rounded-2xl max-h-56 overflow-y-auto custom-scrollbar shadow-inner">
-                                {services.map((service) => {
-                                    const isSelected = formData.serviceIds.includes(service.id);
-                                    return (
-                                        <button
-                                            key={service.id}
-                                            type="button"
-                                            onClick={(e) => toggleService(service.id, e)}
-                                            className={cn(
-                                                "flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-[11px] font-bold transition-all group/btn uppercase tracking-wider",
-                                                isSelected
-                                                    ? "bg-white border-blue-600 text-blue-700 shadow-md ring-2 ring-blue-50"
-                                                    : "bg-white border-slate-200 text-slate-400 hover:border-blue-300 hover:text-slate-600"
-                                            )}
-                                        >
-                                            <div className={cn(
-                                                "w-4 h-4 rounded-md border flex items-center justify-center transition-all flex-shrink-0 shadow-sm",
-                                                isSelected ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 group-hover/btn:border-blue-300"
-                                            )}>
-                                                {isSelected && <Check className="w-2.5 h-2.5 stroke-[4px]" />}
-                                            </div>
-                                            <span className="truncate">{service.serviceName}</span>
-                                        </button>
-                                    );
-                                })}
-                                {services.length === 0 && (
-                                    <div className="col-span-full py-8 text-center bg-white/50 rounded-xl border border-dashed border-slate-200">
-                                        <Loader2 className="w-5 h-5 animate-spin text-slate-300 mx-auto mb-2" />
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Synchronizing Service Matrix</p>
-                                    </div>
-                                )}
-                            </div>
+                            )}
                         </div>
                     </div>
 
-                    {/* Integrated Metadata Section (Read-only / Synced) */}
+                    {/* Read-only synced metadata */}
                     {client && (client.source === "INVOICE_SYSTEM" || client.gstin || client.poc || client.address) && (
-                        <div className="space-y-4 pt-4 border-t border-slate-100">
-                             <div className="flex items-center gap-2 mb-2">
-                                <Shield className="w-3.5 h-3.5 text-emerald-600" />
-                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Verified System Metadata</h4>
-                                <div className="h-px flex-1 bg-slate-100" />
-                            </div>
-                            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 bg-emerald-50/30 rounded-2xl p-6 border border-emerald-100/50">
+                        <div className="pt-2 border-t border-slate-100">
+                            <SectionLabel icon={Shield} label="Synced from Invoice System (read-only)" />
+                            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 bg-slate-50 rounded-lg p-4 border border-slate-100">
                                 {client.poc && (
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-black uppercase tracking-widest leading-none">
-                                            <User className="w-2.5 h-2.5" />
-                                            Primary POC
-                                        </div>
-                                        <p className="text-sm font-bold text-slate-700 truncate pl-4 border-l border-emerald-100 ml-1">{client.poc}</p>
+                                    <div>
+                                        <p className="text-[11px] text-slate-400 mb-0.5">Point of Contact</p>
+                                        <p className="text-sm font-medium text-slate-700">{client.poc}</p>
                                     </div>
                                 )}
                                 {client.gstin && (
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-black uppercase tracking-widest leading-none">
-                                            <Shield className="w-2.5 h-2.5" />
-                                            Tax ID / GSTIN
-                                        </div>
-                                        <p className="text-[11px] font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded ml-1 w-fit">{client.gstin}</p>
+                                    <div>
+                                        <p className="text-[11px] text-slate-400 mb-0.5">GSTIN</p>
+                                        <p className="text-xs font-mono font-semibold text-slate-700">{client.gstin}</p>
                                     </div>
                                 )}
                                 {client.externalId && (
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-black uppercase tracking-widest leading-none">
-                                            <Hash className="w-2.5 h-2.5" />
-                                            External ID
-                                        </div>
-                                        <p className="text-xs font-mono font-bold text-slate-600 pl-4 border-l border-emerald-100 ml-1">#{client.externalId}</p>
+                                    <div>
+                                        <p className="text-[11px] text-slate-400 mb-0.5">External ID</p>
+                                        <p className="text-xs font-mono text-slate-600">#{client.externalId}</p>
                                     </div>
                                 )}
                                 {(client.phone || client.mobile) && (
-                                    <div className="space-y-1 col-span-full">
-                                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-black uppercase tracking-widest leading-none">
-                                            <Phone className="w-2.5 h-2.5" />
-                                            Authorized Telemetry
-                                        </div>
-                                        <p className="text-sm font-bold text-slate-700 pl-4 border-l border-emerald-100 ml-1">
-                                            {[client.phone, client.mobile].filter(Boolean).join(" • ")}
-                                        </p>
+                                    <div>
+                                        <p className="text-[11px] text-slate-400 mb-0.5">Phone</p>
+                                        <p className="text-sm font-medium text-slate-700">{[client.phone, client.mobile].filter(Boolean).join(" / ")}</p>
                                     </div>
                                 )}
                                 {client.address && (
-                                    <div className="space-y-1 col-span-full">
-                                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-black uppercase tracking-widest leading-none">
-                                            <MapPin className="w-2.5 h-2.5" />
-                                            Geospatial Node
-                                        </div>
-                                        <p className="text-[11px] font-medium text-slate-600 leading-relaxed italic pl-4 border-l border-emerald-100 ml-1">
-                                            {client.address}
-                                        </p>
-                                    </div>
-                                )}
-                                {client.clientAddedOn && (
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-black uppercase tracking-widest leading-none">
-                                            <Calendar className="w-2.5 h-2.5" />
-                                            Partnership Since
-                                        </div>
-                                        <p className="text-xs font-bold text-slate-700 pl-4 border-l border-emerald-100 ml-1">
-                                            {new Date(client.clientAddedOn).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
-                                        </p>
+                                    <div className="col-span-full">
+                                        <p className="text-[11px] text-slate-400 mb-0.5">Address</p>
+                                        <p className="text-xs text-slate-600 leading-relaxed">{client.address}</p>
                                     </div>
                                 )}
                                 {client.lastInvoiceDate && (
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-1.5 text-[10px] text-blue-600 font-black uppercase tracking-widest leading-none">
-                                            <Calendar className="w-2.5 h-2.5" />
-                                            Last Invoice
-                                        </div>
-                                        <p className="text-xs font-bold text-blue-800 pl-4 border-l border-blue-100 ml-1">
-                                            {new Date(client.lastInvoiceDate).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+                                    <div>
+                                        <p className="text-[11px] text-slate-400 mb-0.5">Last Invoice</p>
+                                        <p className="text-sm font-medium text-slate-700">
+                                            {new Date(client.lastInvoiceDate).toLocaleDateString(undefined, { month: "short", year: "numeric" })}
                                         </p>
                                     </div>
                                 )}
@@ -353,11 +302,12 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
                     )}
                 </form>
 
-                <div className="p-8 border-t border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row gap-4 flex-shrink-0">
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-slate-100 flex gap-3 flex-shrink-0">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="flex-1 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-slate-900 transition-all"
+                        className="flex-1 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors"
                     >
                         Cancel
                     </button>
@@ -365,9 +315,9 @@ export function ClientModal({ isOpen, onClose, onSuccess, client }: ClientModalP
                         type="submit"
                         disabled={loading}
                         onClick={handleSubmit}
-                        className="flex-[1.5] py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-slate-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2.5 shadow-xl shadow-slate-200 disabled:opacity-70 group"
+                        className="flex-[2] py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60"
                     >
-                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 group-hover:scale-110 transition-transform" />}
+                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                         {client ? "Save Changes" : "Add Client"}
                     </button>
                 </div>

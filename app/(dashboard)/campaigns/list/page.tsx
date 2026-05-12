@@ -298,7 +298,7 @@ export default function CampaignListPage() {
             <div className="w-full px-3 sm:px-5 lg:px-8 py-5 sm:py-6 space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
                     <div>
-                        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Campaign List</h1>
+                        <h1 className="text-xl font-semibold text-slate-900 tracking-tight">Campaign List</h1>
                         <p className="text-sm text-slate-500 mt-1">Review, edit, draft, or send your generated campaigns.</p>
                     </div>
                     <button
@@ -339,7 +339,7 @@ export default function CampaignListPage() {
 
                 {/* Desktop table */}
                 <div className="hidden lg:block bg-white border border-slate-200 rounded-xl overflow-hidden">
-                    <div className="grid grid-cols-12 gap-3 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-100 bg-slate-50">
+                    <div className="grid grid-cols-12 gap-3 px-5 py-3 text-xs font-medium text-slate-400 border-b border-slate-100 bg-slate-50">
                         <div className="col-span-4">Client / Subject</div>
                         <div className="col-span-2">Type</div>
                         <div className="col-span-2">Status</div>

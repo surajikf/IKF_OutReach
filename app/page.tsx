@@ -133,7 +133,7 @@ export default function Dashboard() {
       <div className="w-full px-4 md:px-8 xl:px-10 py-8 space-y-6">
         <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 px-2">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[.2em] text-blue-600 mb-1">Control Center</p>
+            <p className="text-[10px] font-medium text-blue-600 mb-1">Control Center</p>
             <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Dashboard</h1>
             <p className="text-sm font-medium text-slate-500 mt-1">Easily see your client status and what needs attention next.</p>
           </div>
@@ -167,7 +167,7 @@ export default function Dashboard() {
             <button
               onClick={() => fetchStats(true)}
               disabled={isRefreshing}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 bg-white text-[10px] font-semibold text-slate-600 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm disabled:opacity-50"
             >
               <RefreshCw className={`w-3 h-3 ${isRefreshing ? "animate-spin" : ""}`} />
               Refresh
@@ -179,22 +179,22 @@ export default function Dashboard() {
           {summaryCards.map((card) => (
             <div key={card.id} className="bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm hover:shadow-md transition-shadow group/card" title={card.title}>
               <div className="flex items-center justify-between mb-2">
-                <span className={`text-[10px] font-black uppercase tracking-widest text-slate-400 transition-colors ${card.accent === "emerald" ? "group-hover/card:text-emerald-500" : "group-hover/card:text-blue-500"}`}>{card.label}</span>
+                <span className={`text-[10px] font-medium text-slate-400 transition-colors ${card.accent === "emerald" ? "group-hover/card:text-emerald-500" : "group-hover/card:text-blue-500"}`}>{card.label}</span>
                 <card.icon className={`w-4 h-4 ${card.accent === "emerald" ? "text-emerald-500" : "text-blue-500"}`} />
               </div>
               <div className="text-2xl font-bold text-slate-900">{card.value}</div>
-              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-tight">{card.sub}</div>
+              <div className="text-[11px] font-medium text-slate-500">{card.sub}</div>
             </div>
           ))}
         </section>
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
           <section className="xl:col-span-4 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3" title="The smartest next step to take based on your current data">Recommended Step</p>
+            <p className="text-xs font-medium text-slate-400 mb-3" title="The smartest next step to take based on your current data">Recommended Step</p>
             <h2 className="text-xl font-bold text-slate-900 mb-2 capitalize">{safe.recommendedAction.actionType.replace(/_/g, " ")}</h2>
             <p className="text-sm font-medium text-slate-500 mb-3">{safe.recommendedAction.reason}</p>
             <div className="bg-slate-50 rounded-xl p-3 mb-6">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mb-1">Expected Impact</p>
+              <p className="text-[10px] font-medium text-slate-400 mb-1">Expected Impact</p>
               <p className="text-xs font-bold text-blue-700">
                 {safe.recommendedAction.impactEstimate} · Targeting {safe.recommendedAction.targetCount} Clients
               </p>
@@ -210,10 +210,10 @@ export default function Dashboard() {
 
           <section className="xl:col-span-5 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-sm font-black uppercase tracking-widest text-slate-900" title="Key tasks and cleanup actions to keep your business running smoothly">To-Do List</h3>
+              <h3 className="text-sm font-semibold text-slate-900" title="Key tasks and cleanup actions to keep your business running smoothly">To-Do List</h3>
               <button 
                 onClick={() => router.push(appPath("/campaigns"))} 
-                className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-1 rounded transition-colors"
+                className="text-[10px] font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-1 rounded transition-colors"
               >
                 Campaigns
               </button>
@@ -242,7 +242,7 @@ export default function Dashboard() {
                       <div className="text-[11px] font-medium text-slate-400 truncate mt-1 pl-8">{item.details}</div>
                     ) : null}
                   </div>
-                  <button onClick={() => router.push(item.route)} className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-blue-600 transition-colors">Action</button>
+                  <button onClick={() => router.push(item.route)} className="text-[10px] font-semibold text-slate-400 hover:text-blue-600 transition-colors">Action</button>
                 </div>
               ))}
               {(safe.processChecklist || []).length === 0 && (
@@ -254,8 +254,8 @@ export default function Dashboard() {
             <div className="mt-6 pt-6 border-t border-slate-100">
               <div className="flex items-center gap-3 mb-4">
                 <LineChart className="w-4 h-4 text-blue-500" />
-                <span className="text-[10px] font-black uppercase tracking-[.15em] text-slate-500">7-Day Engagement Velocity</span>
-                <span className={`ml-auto text-[10px] font-black px-2 py-0.5 rounded uppercase ${campaignDelta >= 0 ? "text-emerald-600 bg-emerald-50" : "text-rose-600 bg-rose-50"}`}>
+                <span className="text-[10px] font-medium text-slate-500">7-Day Engagement Velocity</span>
+                <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded ${campaignDelta >= 0 ? "text-emerald-600 bg-emerald-50" : "text-rose-600 bg-rose-50"}`}>
                   {campaignDelta >= 0 ? "+" : ""}{campaignDelta} Change
                 </span>
               </div>
@@ -270,7 +270,7 @@ export default function Dashboard() {
                         <div className="absolute top-1 inset-x-1 h-0.5 bg-white/20 rounded-full" />
                       </div>
                     </div>
-                    <span className="text-[9px] font-black uppercase tracking-tighter text-slate-400 group-hover/bar:text-slate-600">{point.label}</span>
+                    <span className="text-[9px] font-medium text-slate-400 group-hover/bar:text-slate-600">{point.label}</span>
                   </div>
                 ))}
               </div>
@@ -278,25 +278,25 @@ export default function Dashboard() {
           </section>
 
           <aside className="xl:col-span-3 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 mb-4" title="Deep analysis of your client base through smart grouping">Key Insights</h3>
+            <h3 className="text-sm font-semibold text-slate-900 mb-4" title="Deep analysis of your client base through smart grouping">Key Insights</h3>
             <div className="space-y-4">
               <div className="flex justify-between items-center bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Dormant (30d)</span>
-                <span className="text-xs font-black text-rose-600">{safe.audienceState.noContact30d}</span>
+                <span className="text-[10px] font-semibold text-slate-400">Dormant (30d)</span>
+                <span className="text-xs font-semibold text-rose-600">{safe.audienceState.noContact30d}</span>
               </div>
               <div className="flex justify-between items-center bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Weekly Pulse</span>
-                <span className="text-xs font-black text-blue-600">{safe.campaignState.campaigns7d}</span>
+                <span className="text-[10px] font-semibold text-slate-400">Weekly Pulse</span>
+                <span className="text-xs font-semibold text-blue-600">{safe.campaignState.campaigns7d}</span>
               </div>
               <div className="flex justify-between items-center bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Growth Signal</span>
-                <span className="text-xs font-black text-emerald-600">{clientDelta >= 0 ? "+" : ""}{clientDelta}</span>
+                <span className="text-[10px] font-semibold text-slate-400">Growth Signal</span>
+                <span className="text-xs font-semibold text-emerald-600">{clientDelta >= 0 ? "+" : ""}{clientDelta}</span>
               </div>
             </div>
             
             <div className="pt-6 border-t border-slate-100 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400" title="How your clients are categorized by relationship type">Client Mix</span>
+                <span className="text-[10px] font-semibold text-slate-400" title="How your clients are categorized by relationship type">Client Mix</span>
                 <span className="text-[10px] font-bold text-slate-500">{safe.stats.activeClients + safe.stats.warmLeads + safe.stats.pastClients} Clients</span>
               </div>
               <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden flex shadow-inner">
@@ -304,7 +304,7 @@ export default function Dashboard() {
                 <div className="bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.2)]" style={{ width: `${Math.round((safe.stats.warmLeads / activeWarmTotal) * 100)}%` }} />
                 <div className="bg-slate-300" style={{ width: `${Math.round((safe.stats.pastClients / activeWarmTotal) * 100)}%` }} />
               </div>
-              <div className="grid grid-cols-3 text-[9px] font-black uppercase tracking-widest text-slate-400 gap-2">
+              <div className="grid grid-cols-3 text-[9px] font-semibold text-slate-400 gap-2">
                 <div className="text-center">Active</div>
                 <div className="text-center">Warm</div>
                 <div className="text-center">Inactive</div>
@@ -312,20 +312,20 @@ export default function Dashboard() {
             </div>
 
             <div className="pt-6 border-t border-slate-100">
-              <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4" title="External services successfully connected to your account">Synced Apps</div>
+              <div className="text-[10px] font-semibold text-slate-400 mb-4" title="External services successfully connected to your account">Synced Apps</div>
               <div className="space-y-2">
                 <div className="flex justify-between items-center bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                  <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Invoices</span>
-                  <span className="text-xs font-black text-slate-900">{safe.sourceStats.invoice}</span>
+                  <span className="text-[10px] font-medium text-indigo-600">Invoices</span>
+                  <span className="text-xs font-semibold text-slate-900">{safe.sourceStats.invoice}</span>
                 </div>
                 <div className="flex justify-between items-center bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                  <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Zoho Bigin</span>
-                  <span className="text-xs font-black text-slate-900">{safe.sourceStats.zoho}</span>
+                  <span className="text-[10px] font-medium text-amber-600">Zoho Bigin</span>
+                  <span className="text-xs font-semibold text-slate-900">{safe.sourceStats.zoho}</span>
                 </div>
                 <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 space-y-1">
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Gmail Sync</span>
-                    <span className="text-[10px] font-black text-slate-900 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
+                    <span className="text-[10px] font-medium text-rose-500">Gmail Sync</span>
+                    <span className="text-[10px] font-medium text-slate-900 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
                       {(safe.sourceStats.gmail || []).reduce((acc, g) => acc + g.count, 0)} Total
                     </span>
                   </div>
@@ -338,7 +338,7 @@ export default function Dashboard() {
                             {g.email === 'Unassigned' ? 'Manual/Old Data' : g.nametext}
                           </span>
                         </div>
-                        <span className="text-[10px] font-black text-slate-600 tabular-nums">{g.count}</span>
+                        <span className="text-[10px] font-medium text-slate-600 tabular-nums">{g.count}</span>
                       </div>
                     ))}
                   </div>
@@ -347,7 +347,7 @@ export default function Dashboard() {
             </div>
             <button
               onClick={() => router.push(appPath("/clients"))}
-              className="w-full py-3 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 hover:border-slate-800 transition-all shadow-sm active:scale-[0.98]"
+              className="w-full py-3 rounded-xl border border-slate-200 bg-white text-[10px] font-semibold text-slate-500 hover:text-slate-900 hover:border-slate-800 transition-all shadow-sm active:scale-[0.98]"
             >
               Audience Audit
             </button>
@@ -356,10 +356,10 @@ export default function Dashboard() {
 
         <section className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 border-l-4 border-blue-600 pl-4">Recent Activity</h3>
+            <h3 className="text-sm font-semibold text-slate-900 border-l-4 border-blue-600 pl-4">Recent Activity</h3>
             <button 
               onClick={() => router.push(appPath("/campaigns/results"))} 
-              className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-blue-600 transition-colors"
+              className="text-[10px] font-semibold text-slate-400 hover:text-blue-600 transition-colors"
             >
               View Feed
             </button>
@@ -374,7 +374,7 @@ export default function Dashboard() {
                 <div key={c.id} className="bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 hover:bg-white hover:border-blue-200 transition-all group">
                   <div className="text-sm font-bold text-slate-900 truncate mb-1">{c.clientName}</div>
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{c.type}</span>
+                    <span className="text-[9px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{c.type}</span>
                     <span className="text-[9px] font-bold text-slate-400 uppercase">{c.industry}</span>
                   </div>
                   <div className="text-[10px] font-medium text-slate-400 italic">
@@ -392,23 +392,23 @@ export default function Dashboard() {
             <div className="w-8 h-8 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center">
               <Flame className="w-4 h-4 text-amber-500" />
             </div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-900" title="Key indicators of system growth and engagement health">Growth Indicators</h3>
+            <h3 className="text-sm font-semibold text-slate-900" title="Key indicators of system growth and engagement health">Growth Indicators</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs relative z-10">
             <div className="bg-slate-50/80 backdrop-blur-sm border border-slate-100 rounded-2xl p-4 group hover:bg-white hover:border-blue-200 transition-all">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Portfolio Expansion</p>
+              <p className="text-[10px] font-semibold text-slate-400 mb-2">Portfolio Expansion</p>
               <p className="text-lg font-bold text-slate-900">{safe.stats.trends.growth} Growth</p>
               <p className="text-[10px] font-medium text-slate-500 mt-1 uppercase">vs baseline metrics</p>
             </div>
             <div className="bg-slate-50/80 backdrop-blur-sm border border-slate-100 rounded-2xl p-4 group hover:bg-white hover:border-blue-200 transition-all">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Engagement Momentum</p>
+              <p className="text-[10px] font-semibold text-slate-400 mb-2">Engagement Momentum</p>
               <p className="text-lg font-bold text-slate-900">{campaignDelta >= 0 ? "Improving" : "Cooling"}</p>
               <p className="text-[10px] font-medium text-slate-500 mt-1 uppercase">
                 {campaignDelta >= 0 ? "+" : ""}{campaignDelta} Strategic Dispatches
               </p>
             </div>
             <div className="bg-slate-50/80 backdrop-blur-sm border border-slate-100 rounded-2xl p-4 group hover:bg-white hover:border-blue-200 transition-all">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">System Integrity</p>
+              <p className="text-[10px] font-semibold text-slate-400 mb-2">System Integrity</p>
               <p className="text-lg font-bold text-rose-600">{safe.dataHealth.staleRecords} Stale</p>
               <p className="text-[10px] font-medium text-slate-500 mt-1 uppercase">Units requiring calibration</p>
             </div>

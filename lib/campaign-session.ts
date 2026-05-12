@@ -54,13 +54,15 @@ export type EditorPrefs = {
 const EDITOR_PREFS_KEY = "ikf.editorPrefs.v1";
 
 export function readEditorPrefs(): EditorPrefs {
-    if (typeof window === "undefined") return { fontFamily: "", fontSize: "14px" };
+    if (typeof window === "undefined") return { fontFamily: "Calibri, sans-serif", fontSize: "14px" };
     try {
         const raw = window.localStorage.getItem(EDITOR_PREFS_KEY);
-        if (!raw) return { fontFamily: "", fontSize: "14px" };
-        return JSON.parse(raw) as EditorPrefs;
+        if (!raw) return { fontFamily: "Calibri, sans-serif", fontSize: "14px" };
+        const parsed = JSON.parse(raw) as EditorPrefs;
+        // Backfill: if stored prefs have no fontFamily, use Calibri
+        return { fontFamily: parsed.fontFamily || "Calibri, sans-serif", fontSize: parsed.fontSize || "14px" };
     } catch {
-        return { fontFamily: "", fontSize: "14px" };
+        return { fontFamily: "Calibri, sans-serif", fontSize: "14px" };
     }
 }
 

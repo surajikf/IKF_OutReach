@@ -517,6 +517,20 @@ async function runDispatchBatch(job: JobRow) {
   const campaignIds: string[] = Array.isArray(payload?.campaignIds) ? payload.campaignIds : [];
   const dispatchMode: "SEND" | "DRAFT" = payload?.dispatchMode === "DRAFT" ? "DRAFT" : "SEND";
   const userId = payload?.userId ? String(payload.userId) : null;
+  const batchSize: number = typeof payload?.batchSize === "number" ? Math.max(1, Math.min(500, payload.batchSize)) : 50;
+  const batchDelayMs: number = typeof payload?.batchDelayMinutes === "number" ? payload.batchDelayMinutes * 60 * 1000 : 5 * 60 * 1000;
+  const scheduledAt: Date | null = payload?.scheduledAt ? new Date(payload.scheduledAt) : null;
+
+  // Scheduled dispatch: if not yet time, requeue and exit
+  if (scheduledAt && scheduledAt > new Date()) {
+    console.log(`[job-worker] Dispatch job ${job.id} is scheduled for ${scheduledAt.toISOString()}. Requeueing.`);
+    await (prisma as any).job.update({
+      where: { id: job.id },
+      data: { status: "QUEUED", startedAt: null },
+    });
+    await sleep(Math.min(scheduledAt.getTime() - Date.now(), 60_000));
+    return { scheduled: true, scheduledAt: scheduledAt.toISOString() };
+  }
 
   if (!userId) {
     console.warn("[job-worker] Dispatch batch started without explicit userId. Falling back to default identity.");
@@ -525,6 +539,12 @@ async function runDispatchBatch(job: JobRow) {
   const total = campaignIds.length;
   let successCount = 0;
   const failures: Array<{ campaignId: string; error: string }> = [];
+
+  // Deduplicate: track which email addresses have already been sent to in this batch.
+  // If the same email appears across Invoice, Gmail, or Zoho clients, only the first campaign wins.
+  const sentEmails = new Set<string>();
+
+  console.log(`[job-worker] Dispatch batch: ${total} campaigns, batchSize=${batchSize}, delay=${batchDelayMs / 60000}min, mode=${dispatchMode}`);
 
   for (let i = 0; i < campaignIds.length; i++) {
     const campaignId = campaignIds[i];
@@ -538,6 +558,19 @@ async function runDispatchBatch(job: JobRow) {
         throw new Error("Campaign client email missing.");
       }
 
+      // Deduplicate across all email addresses on this client record
+      const recipientEmails = campaign.client.email
+        .split(",")
+        .map((e: string) => e.trim().toLowerCase())
+        .filter(Boolean);
+      const isDuplicate = recipientEmails.some((e: string) => sentEmails.has(e));
+      if (isDuplicate) {
+        console.log(`[job-worker] Skipping duplicate email(s) ${recipientEmails.join(", ")} for campaign ${campaignId}`);
+        failures.push({ campaignId, error: "Duplicate email — already sent in this batch." });
+        continue;
+      }
+      recipientEmails.forEach((e: string) => sentEmails.add(e));
+
       const parsedOutput = parseCampaignGeneratedOutput(campaign.generatedOutput);
       const { subject, body } = parsedOutput;
 
@@ -548,13 +581,15 @@ async function runDispatchBatch(job: JobRow) {
 
       console.log(`[job-worker] Dispatching campaign ${campaignId} to ${campaign.client.email} (Mode: ${dispatchMode})`);
 
+      const existingDraftId = (campaign as any).gmailDraftId || undefined;
+
       const result = dispatchMode === "DRAFT"
         ? await createStrategicGmailDraft({
             to: campaign.client.email,
             subject,
             html: htmlBody,
             text: body.replace(/<[^>]*>/g, ""),
-          }, { userId: payload?.userId })
+          }, { userId: payload?.userId, existingDraftId })
         : await sendStrategicEmail({
             to: campaign.client.email,
             subject,
@@ -569,8 +604,27 @@ async function runDispatchBatch(job: JobRow) {
 
       console.log(`[job-worker] Dispatch successful for campaign ${campaignId}. MessageId: ${result.messageId}`);
 
-      // Smart Rate Limiting: 150ms delay to prevent burst issues
+      // Store Gmail draft ID so "Update Draft" can reuse the same draft instead of creating a new one
+      if (dispatchMode === "DRAFT" && (result as any).draftId) {
+        await (prisma as any).campaignHistory.update({
+          where: { id: campaignId },
+          data: { gmailDraftId: (result as any).draftId },
+        }).catch((err: any) => console.warn(`[job-worker] Failed to store draftId for ${campaignId}:`, err));
+      }
+
+      // Per-email rate limiting
       await sleep(150);
+
+      // Batch boundary: pause between batches to respect Gmail daily limits
+      const isEndOfBatch = (i + 1) % batchSize === 0 && i + 1 < total;
+      if (isEndOfBatch && batchDelayMs > 0) {
+        console.log(`[job-worker] Batch boundary after ${i + 1} emails. Waiting ${batchDelayMs / 60000}min before next batch.`);
+        await (prisma as any).job.update({
+          where: { id: job.id },
+          data: { progress: Math.round(((i + 1) / total) * 100) },
+        });
+        await sleep(batchDelayMs);
+      }
 
       successCount++;
     } catch (e: any) {

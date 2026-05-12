@@ -55,8 +55,8 @@ export function ClientWrapper({ children }: { children: React.ReactNode }) {
                         isAuthPage
                             ? "w-full"
                             : isDashboard
-                                ? "flex-1 w-full overflow-hidden"
-                                : "flex-1 w-full overflow-x-hidden px-3 sm:px-4 lg:px-6 py-4",
+                                ? "flex-1 w-full overflow-x-clip"
+                                : "flex-1 w-full overflow-x-clip px-3 sm:px-4 lg:px-6 py-4",
                     )}
                 >
                     <AnimatePresence mode="wait">

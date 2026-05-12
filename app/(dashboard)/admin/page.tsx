@@ -142,9 +142,9 @@ export default function AdminDashboard() {
       <header className="px-1">
         <div className="flex items-center gap-2 text-red-600 mb-2">
           <ShieldAlert className="w-4 h-4" />
-          <span className="text-[10px] font-bold uppercase tracking-widest">Level-5 Clearance Zone</span>
+          <span className="text-xs font-medium text-slate-500">Control Panel</span>
         </div>
-        <h1 className="text-3xl font-bold text-slate-900">Access Management</h1>
+        <h1 className="text-xl font-semibold text-slate-900">Access Management</h1>
         <p className="text-sm text-slate-500 mt-1">Approve users and manage role and invoice access.</p>
       </header>
 
@@ -195,11 +195,11 @@ export default function AdminDashboard() {
           <table className="w-full text-left min-w-[860px]">
             <thead className="bg-slate-50/70 border-b border-slate-100">
               <tr>
-                <th className="px-6 py-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">User</th>
-                <th className="px-6 py-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">Account</th>
-                <th className="px-6 py-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">Role</th>
-                <th className="px-6 py-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">Invoice</th>
-                <th className="px-6 py-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 text-right">Action</th>
+                <th className="px-6 py-3.5 text-xs font-medium text-slate-500">User</th>
+                <th className="px-6 py-3.5 text-xs font-medium text-slate-500">Account</th>
+                <th className="px-6 py-3.5 text-xs font-medium text-slate-500">Role</th>
+                <th className="px-6 py-3.5 text-xs font-medium text-slate-500">Invoice</th>
+                <th className="px-6 py-3.5 text-xs font-medium text-slate-500 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -383,7 +383,7 @@ function SummaryCard({
 
   return (
     <div className={`rounded-xl border px-4 py-3 ${tones[tone]}`}>
-      <p className="text-xs font-semibold uppercase tracking-wider">{label}</p>
+      <p className="text-xs font-semibold">{label}</p>
       <p className="text-2xl font-bold mt-1">{value}</p>
     </div>
   );

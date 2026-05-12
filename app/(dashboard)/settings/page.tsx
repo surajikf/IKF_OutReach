@@ -191,7 +191,7 @@ export default function SettingsPage() {
 
     const CredentialInput = ({ label, value, field, placeholder, type = "password" }: { label: string, value: string, field: string, placeholder?: string, type?: string }) => (
         <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-0.5">{label}</label>
+            <label className="text-[10px] font-medium text-slate-400 ml-0.5">{label}</label>
             <div className="relative group">
                 <input
                     type={type === "password" ? (showKeys[field] ? "text" : "password") : type}
@@ -242,78 +242,6 @@ export default function SettingsPage() {
             />
 
             <div className="grid gap-6">
-                {/* 1. Intelligence Hub */}
-                <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-sm space-y-8">
-                    <div className="flex items-center gap-3 pb-4 border-b border-slate-50">
-                        <div className="p-2 rounded-lg bg-slate-50 border border-slate-100 text-slate-600">
-                            <Bot className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Intelligence Hub</h3>
-                            <p className="text-xs font-medium text-slate-400">Configure AI providers and authorization nodes.</p>
-                        </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-8">
-                        <div className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-0.5">Provider</label>
-                                    <select
-                                        value={formData.aiProvider}
-                                        onChange={(e) => setFormData({ ...formData, aiProvider: e.target.value })}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2.5 outline-none focus:bg-white focus:border-blue-500 transition-all font-semibold text-slate-700 text-sm"
-                                    >
-                                        <option value="Groq">Groq Synthesis</option>
-                                        <option value="OpenAI">OpenAI Intelligence</option>
-                                    </select>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-0.5">Model</label>
-                                    <select
-                                        value={formData.aiModel}
-                                        onChange={(e) => setFormData({ ...formData, aiModel: e.target.value })}
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2.5 outline-none focus:bg-white focus:border-blue-500 transition-all font-semibold text-slate-700 text-sm"
-                                    >
-                                        <option value={formData.aiModel}>{formData.aiModel}</option>
-                                        {formData.aiProvider === "Groq" && <option value="llama-3.3-70b-versatile">llama-3.3-70b</option>}
-                                        {formData.aiProvider === "OpenAI" && <option value="gpt-4o">gpt-4o</option>}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="pt-2">
-                                <button
-                                    type="button"
-                                    onClick={handleTestAI}
-                                    disabled={testStatus.status === 'testing'}
-                                    className={cn(
-                                        "text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded-md border transition-all flex items-center gap-2",
-                                        testStatus.status === 'success' ? "bg-emerald-50 border-emerald-200 text-emerald-600" :
-                                            testStatus.status === 'error' ? "bg-red-50 border-red-200 text-red-600" :
-                                                "bg-white border-slate-200 text-slate-500 hover:bg-slate-50 shadow-sm"
-                                    )}
-                                >
-                                    <Zap className={cn("w-3.5 h-3.5", testStatus.status === 'testing' && "animate-pulse")} />
-                                    {testStatus.status === 'testing' ? "Testing..." : "Test Connection"}
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="bg-slate-50 p-6 rounded-lg border border-slate-100 flex flex-col justify-center">
-                            {formData.aiProvider === "Groq" ? (
-                                <CredentialInput label="Groq Strategic Key" value={formData.groqApiKey} field="groqApiKey" placeholder="gsk_••••••••" />
-                            ) : (
-                                <CredentialInput label="OpenAI Project Key" value={formData.openaiApiKey} field="openaiApiKey" placeholder="sk-••••••••" />
-                            )}
-                            <p className="text-[10px] text-slate-400 font-medium mt-3 flex items-center gap-1.5 uppercase tracking-tight italic">
-                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                                Encrypted node storage active.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                     <div className="p-6 pb-2">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -329,7 +257,7 @@ export default function SettingsPage() {
                             
                             <div className="flex items-center gap-3 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100">
                                 <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-slate-900 uppercase tracking-wider">Auto-Backup (SMTP)</span>
+                                    <span className="text-[10px] font-medium text-slate-900">Auto-Backup (SMTP)</span>
                                     <span className="text-[9px] text-slate-500 font-medium">Switches on failure</span>
                                 </div>
                                 <button
@@ -441,18 +369,18 @@ export default function SettingsPage() {
                                                         </div>
                                                         <div>
                                                             <div className="flex items-center gap-2">
-                                                                <span className="text-xs font-black text-slate-900 uppercase tracking-tight">{account.accountName}</span>
-                                                                {account.isDefault && <span className="text-[9px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-full uppercase tracking-widest">Primary</span>}
-                                                                {!account.scopeGranted && <span className="text-[9px] font-black bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full uppercase tracking-widest border border-amber-200">Invalid Scope</span>}
+                                                                <span className="text-xs font-semibold text-slate-900">{account.accountName}</span>
+                                                                {account.isDefault && <span className="text-[9px] font-semibold bg-blue-600 text-white px-2 py-0.5 rounded-full">Primary</span>}
+                                                                {!account.scopeGranted && <span className="text-[9px] font-semibold bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full border border-amber-200">Invalid Scope</span>}
                                                             </div>
                                                             <p className="text-xs font-medium text-slate-500 font-mono lower">{account.email}</p>
                                                             <div className="flex items-center gap-3 mt-1.5">
-                                                                <div className="flex items-center gap-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
+                                                                <div className="flex items-center gap-1.5 text-[9px] font-medium text-slate-400">
                                                                     <Timer className="w-3 h-3" />
                                                                     Last Used: {account.lastUsed ? new Date(account.lastUsed).toLocaleTimeString() : "Never"}
                                                                 </div>
                                                                 <div className={cn(
-                                                                    "flex items-center gap-1.5 text-[9px] font-black uppercase tracking-tighter",
+                                                                    "flex items-center gap-1.5 text-[9px] font-medium",
                                                                     account.lastStatus === "HEALTHY" ? "text-emerald-500" : "text-slate-400"
                                                                 )}>
                                                                     <Activity className="w-3 h-3" />
@@ -472,7 +400,7 @@ export default function SettingsPage() {
                                                                     });
                                                                     if ((await res.json()).success) { toast.success("Identity promoted."); fetchSettings(); }
                                                                 }}
-                                                                className="text-[9px] font-black text-slate-500 hover:text-blue-600 uppercase tracking-widest px-3 py-1.5 rounded-lg border border-slate-200 hover:border-blue-200 transition-all font-mono"
+                                                                className="text-[9px] font-medium text-slate-500 hover:text-blue-600 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-blue-200 transition-all font-mono"
                                                             >
                                                                 [PROMOTE]
                                                             </button>
@@ -546,7 +474,7 @@ export default function SettingsPage() {
                                             type="button"
                                             onClick={() => setFormData({ ...formData, smtpSecure: !formData.smtpSecure })}
                                             className={cn(
-                                                "w-full h-11 rounded-lg border text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 shadow-sm font-mono",
+                                                "w-full h-11 rounded-lg border text-[10px] font-medium transition-all flex items-center justify-center gap-2 shadow-sm font-mono",
                                                 formData.smtpSecure ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-slate-50 border-slate-200 text-slate-400"
                                             )}
                                         >
@@ -560,7 +488,7 @@ export default function SettingsPage() {
                                     <div className="space-y-6 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
                                         <div className="flex items-center gap-2 mb-2">
                                             <Key className="w-4 h-4 text-blue-500" />
-                                            <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">ACCESS CREDENTIALS</span>
+                                            <span className="text-[10px] font-semibold text-slate-900">Access Credentials</span>
                                         </div>
                                         <CredentialInput label="Registry Username" field="smtpUser" value={formData.smtpUser} placeholder="Login / IAM User" type="text" />
                                         <CredentialInput label="Access Key / Pass" field="smtpPass" value={formData.smtpPass} placeholder="••••••••••••••••" />
@@ -568,7 +496,7 @@ export default function SettingsPage() {
                                     <div className="space-y-6 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
                                         <div className="flex items-center gap-2 mb-2">
                                             <Smartphone className="w-4 h-4 text-blue-500" />
-                                            <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">SENDER METADATA</span>
+                                            <span className="text-[10px] font-semibold text-slate-900">Sender Metadata</span>
                                         </div>
                                         <CredentialInput label="Dispatcher Display Name" field="smtpSenderName" value={formData.smtpSenderName} placeholder="Project Name" type="text" />
                                         <CredentialInput label="Verified From Email" field="smtpSenderEmail" value={formData.smtpSenderEmail} placeholder="hello@company.com" type="text" />
@@ -585,15 +513,15 @@ export default function SettingsPage() {
             {resetModalOpen && (
                 <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-200">
-                        <div className="flex items-center gap-3 text-amber-600 mb-6 font-mono text-xs uppercase tracking-[0.25em]">
+                        <div className="flex items-center gap-3 text-amber-600 mb-6 font-mono text-xs">
                              <ShieldAlert className="w-5 h-5" />
                              Security Protocol Warning
                         </div>
-                        <h3 className="text-lg font-black text-slate-900 mb-2 uppercase tracking-tight leading-none">Flush System Configuration?</h3>
+                        <h3 className="text-lg font-semibold text-slate-900 mb-2 leading-none">Flush System Configuration?</h3>
                         <p className="text-sm text-slate-500 font-medium leading-relaxed mb-8">This action will revert all system nodes to their factory baseline. All strategic keys and dispatch identities will be detached.</p>
                         <div className="flex gap-3">
-                            <button onClick={() => setResetModalOpen(false)} className="flex-1 px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-widest transition-all">Cancel</button>
-                            <button onClick={() => { setFormData(defaultSettings); setResetModalOpen(false); toast.info("Settings reset."); }} className="flex-1 px-4 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-red-200 transition-all active:scale-95">Reset Settings</button>
+                            <button onClick={() => setResetModalOpen(false)} className="flex-1 px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold transition-all">Cancel</button>
+                            <button onClick={() => { setFormData(defaultSettings); setResetModalOpen(false); toast.info("Settings reset."); }} className="flex-1 px-4 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-lg shadow-red-200 transition-all active:scale-95">Reset Settings</button>
                         </div>
                     </div>
                 </div>

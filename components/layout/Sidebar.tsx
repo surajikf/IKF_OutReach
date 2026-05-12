@@ -132,9 +132,15 @@ export function Sidebar() {
                 <div className="flex items-center gap-2.5">
                     {projectLogo ? (
                         <div className="bg-slate-900 p-2 rounded-xl border border-slate-800 flex items-center justify-center min-w-[2.5rem]">
-                            <img src={projectLogo} alt={projectName} className="h-7 w-auto object-contain" />
+                            <img
+                                src={projectLogo}
+                                alt={projectName}
+                                className="h-7 w-auto object-contain"
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                            />
                         </div>
-                    ) : (
+                    ) : null}
+                    {!projectLogo && (
                         <>
                             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-base shadow-sm shrink-0">
                                 {projectName.charAt(0)}

@@ -99,7 +99,7 @@ const MicroGauge = ({ value, label, icon: Icon, color = "blue" }: { value: numbe
             </div>
             <div className="text-center space-y-0.5">
                 <span className="block text-lg font-bold text-slate-900 leading-none">{safeValue}%</span>
-                <span className="block text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">{label}</span>
+                <span className="block text-[11px] font-medium text-slate-500">{label}</span>
             </div>
         </div>
     );
@@ -693,7 +693,7 @@ function CampaignResultsContent() {
                 </p>
             </div>
             <div className="w-full max-w-xs space-y-2">
-                <div className="flex justify-between text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
+                <div className="flex justify-between text-[11px] font-semibold text-slate-400">
                     <span>Progress</span>
                     <span>{generationProgress}%</span>
                 </div>
@@ -756,18 +756,18 @@ function CampaignResultsContent() {
                         <List className="w-5 h-5" />
                     </button>
                     <div>
-                        <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 flex items-center gap-3 text-wrap-balance">
+                        <h2 className="text-base font-semibold tracking-tight text-slate-900 flex items-center gap-2.5">
                             Campaign Editor
                             {isJobActive ? (
-                                <span className="flex items-center gap-2 text-[9px] font-black px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100 uppercase tracking-[0.2em]">
-                                    <RefreshCw className="w-2 h-2 animate-spin" />
+                                <span className="flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
+                                    <RefreshCw className="w-2.5 h-2.5 animate-spin" />
                                     Generating {generationProgress}%
                                 </span>
                             ) : (
-                                <span className="hidden xs:inline-block text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase tracking-[0.2em]">Live</span>
+                                <span className="hidden xs:inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">Live</span>
                             )}
                         </h2>
-                        <p className="text-[10px] font-medium text-slate-400 mt-0.5 uppercase tracking-wide">
+                        <p className="text-xs text-slate-400 mt-0.5">
                             {isJobActive ? "Drafts are being prepared in real-time" : "Refine and dispatch your outreach campaign"}
                         </p>
                     </div>
@@ -797,11 +797,11 @@ function CampaignResultsContent() {
                 {/* Left: Campaign List (Desktop/Tablet) */}
                 <div className="hidden md:block md:col-span-4 lg:col-span-3 space-y-4 sticky top-6">
                     <div className="flex items-center justify-between px-2">
-                        <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.25em]">Company Queue</h3>
+                        <h3 className="text-xs font-semibold text-slate-500">Company Queue</h3>
                         {campaigns.length > 1 && (
                             <button
                                 onClick={toggleSelectAll}
-                                className="text-[9px] font-black text-slate-400 hover:text-blue-600 transition-colors flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-blue-50 tracking-[0.1em]"
+                                className="text-xs font-medium text-slate-400 hover:text-blue-600 transition-colors flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-blue-50"
                                 aria-label={selectedIds.size === campaigns.length ? "Deselect all campaigns" : "Select all campaigns"}
                             >
                                 <div className={cn(
@@ -832,7 +832,7 @@ function CampaignResultsContent() {
                         {filteredCampaigns.length === 0 ? (
                             <div className="p-8 text-center space-y-2">
                                 <Search className="w-8 h-8 text-slate-200 mx-auto" />
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                <p className="text-xs font-medium text-slate-400">
                                     {isJobActive ? "Scanning Contacts..." : "No matches found"}
                                 </p>
                             </div>
@@ -865,11 +865,11 @@ function CampaignResultsContent() {
                                             <div className="flex items-center justify-between gap-3">
                                                 <div className="flex items-center gap-2 min-w-0">
                                                     <div className={cn("w-1.5 h-1.5 rounded-full", activeIndex === originalIndex ? "bg-blue-600" : "bg-slate-300")} />
-                                                    <h4 className={cn("text-[9px] font-bold uppercase tracking-wider truncate transition-colors", activeIndex === originalIndex ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700")}>
+                                                    <h4 className={cn("text-[11px] font-medium truncate transition-colors", activeIndex === originalIndex ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700")}>
                                                         {c.client?.clientName}
                                                     </h4>
                                                 </div>
-                                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full border border-slate-100 bg-slate-50 text-slate-300 uppercase tracking-tighter shrink-0">
+                                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-slate-100 bg-slate-50 text-slate-400 shrink-0">
                                                     {c.campaignType}
                                                 </span>
                                             </div>
@@ -906,7 +906,7 @@ function CampaignResultsContent() {
                                 className="fixed inset-y-0 left-0 w-[85%] max-w-sm bg-white shadow-2xl z-[101] flex flex-col md:hidden"
                             >
                                 <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">Company Queue</h3>
+                                    <h3 className="text-sm font-semibold text-slate-900">Company Queue</h3>
                                     <button onClick={() => setIsMobileQueueOpen(false)} className="p-2 rounded-full hover:bg-slate-100 transition-colors">
                                         <X className="w-5 h-5 text-slate-400" />
                                     </button>
@@ -947,8 +947,8 @@ function CampaignResultsContent() {
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center justify-between mb-1">
-                                                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 truncate">{c.client?.clientName}</h4>
-                                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{c.campaignType}</span>
+                                                        <h4 className="text-[11px] font-medium text-slate-900 truncate">{c.client?.clientName}</h4>
+                                                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{c.campaignType}</span>
                                                     </div>
                                                     <p className="text-xs text-slate-500 line-clamp-1">{c.content?.subject}</p>
                                                 </div>
@@ -967,7 +967,7 @@ function CampaignResultsContent() {
                             <div className="space-y-3">
                                 <div className="flex items-center gap-2 group">
                                     <div className="w-1 h-4 bg-blue-600 rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity" />
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Subject</label>
+                                    <label className="text-xs font-medium text-slate-400">Subject</label>
                                 </div>
                                 <input
                                     type="text"
@@ -1017,19 +1017,19 @@ function CampaignResultsContent() {
                             <div className="flex items-center gap-4 sm:gap-6">
                                 <div className="flex items-center gap-2">
                                     <AlignLeft className="w-3.5 h-3.5 text-slate-400" />
-                                    <span className="text-[10px] font-bold text-slate-500 tabular-nums">
+                                    <span className="text-[10px] font-medium text-slate-500 tabular-nums">
                                         {editedBody.replace(/<[^>]*>/g, '').length} Chars
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] tabular-nums">{readingTime}m read</span>
+                                    <span className="text-[10px] font-medium text-slate-400 tabular-nums">{readingTime}m read</span>
                                 </div>
                             </div>
                                 <button
                                     onClick={handleSaveEvolution}
                                     disabled={isSaving}
-                                    className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 hover:text-blue-600 transition-all px-4 py-2 rounded-full hover:bg-blue-50 border border-transparent hover:border-blue-100 disabled:opacity-50"
+                                    className="flex items-center gap-2 text-[10px] font-medium text-slate-400 hover:text-blue-600 transition-all px-4 py-2 rounded-full hover:bg-blue-50 border border-transparent hover:border-blue-100 disabled:opacity-50"
                                     aria-label="Save changes to campaign"
                                 >
                                     {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
@@ -1043,7 +1043,7 @@ function CampaignResultsContent() {
                 <div className="md:col-span-12 lg:col-span-3 space-y-6 lg:sticky lg:top-8">
                     <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-8">
                         <div className="space-y-6">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] text-center">Email Quality</h3>
+                            <h3 className="text-xs font-semibold text-slate-500 text-center">Email Quality</h3>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="relative group/tooltip flex justify-center cursor-help">
                                     <MicroGauge
@@ -1073,7 +1073,7 @@ function CampaignResultsContent() {
                         <div className="space-y-4 hidden md:block">
                             {isDispatching && (
                                 <div className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-500">
-                                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase tracking-widest tabular-nums">
+                                    <div className="flex justify-between items-center text-[10px] font-medium text-slate-500 tabular-nums">
                                         <span>{dispatchMode === "DRAFT" ? "Drafting…" : "Sending…"}</span>
                                         <span>{dispatchProgress}%</span>
                                     </div>
@@ -1128,7 +1128,7 @@ function CampaignResultsContent() {
                             <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -mr-12 -mt-12" />
                             <div className="flex items-center gap-2 relative z-10">
                                 <Sparkles className="w-4 h-4 text-emerald-400" />
-                                <h4 className="text-[10px] font-bold text-white uppercase tracking-widest">Quick Tip</h4>
+                                <h4 className="text-xs font-semibold text-white">Quick Tip</h4>
                             </div>
                             <p className="text-[11px] text-slate-400 leading-relaxed font-medium relative z-10">
                                 This message fits the {activeCampaign?.campaignType} goal. Keep one clear value point and one clear next step.
@@ -1138,7 +1138,7 @@ function CampaignResultsContent() {
                                     <div className="w-5 h-5 rounded-full bg-slate-800 border-2 border-slate-900" />
                                     <div className="w-5 h-5 rounded-full bg-slate-700 border-2 border-slate-900" />
                                 </div>
-                                <span className="text-[9px] font-bold text-slate-500 uppercase">Confidence: High</span>
+                                <span className="text-[10px] font-medium text-slate-500">Confidence: High</span>
                             </div>
                         </div>
                     </div>
@@ -1160,7 +1160,7 @@ function CampaignResultsContent() {
                                     {selectedIds.size || "1"}
                                 </div>
                                 <div className="flex flex-col">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Batch</span>
+                                    <span className="text-[10px] font-medium text-slate-400">Active Batch</span>
                                     <span className="text-white text-xs font-bold truncate max-w-[140px]">
                                         {selectedIds.size === 1 
                                             ? campaigns.find(c => selectedIds.has(c.id))?.client?.clientName 

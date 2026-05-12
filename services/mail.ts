@@ -15,6 +15,7 @@ interface DispatchOptions {
     disableFailover?: boolean;
     overrideGmailAccountId?: string;
     userId?: string;
+    existingDraftId?: string;
 }
 
 type GmailAuthBundle = {
@@ -365,13 +366,23 @@ export async function createStrategicGmailDraft(options: MailOptions, dispatchOp
             .replace(/\//g, "_")
             .replace(/=+$/g, "");
 
-        const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
-            method: "POST",
+        if (!auth.accessToken) {
+            return { success: false, error: "Gmail access token could not be obtained. Please reconnect your Gmail account." };
+        }
+
+        const existingDraftId = dispatchOptions?.existingDraftId;
+        const draftUrl = existingDraftId
+            ? `https://gmail.googleapis.com/gmail/v1/users/me/drafts/${existingDraftId}`
+            : "https://gmail.googleapis.com/gmail/v1/users/me/drafts";
+        const draftMethod = existingDraftId ? "PUT" : "POST";
+
+        const response = await fetch(draftUrl, {
+            method: draftMethod,
             headers: {
-                Authorization: `Bearer ${auth.accessToken || ""}`,
+                Authorization: `Bearer ${auth.accessToken}`,
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({ message: { raw } }),
+            body: JSON.stringify({ id: existingDraftId, message: { raw } }),
         });
 
         const data = await response.json().catch(() => ({}));

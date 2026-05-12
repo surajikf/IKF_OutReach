@@ -84,7 +84,7 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
     const [isLivePreview, setIsLivePreview] = useState(false);
     const [historyState, setHistoryState] = useState({ index: 0, length: 1 });
     const [showVarMenu, setShowVarMenu] = useState(false);
-    const [prefFontFamily, setPrefFontFamily] = useState("");
+    const [prefFontFamily, setPrefFontFamily] = useState("Calibri, sans-serif");
     const [prefFontSize, setPrefFontSize] = useState("14px");
 
     const historyRef = useRef<string[]>([normalizeEmailBodyHtml(content || "")]);
@@ -130,18 +130,15 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
         setPrefFontSize(prefs.fontSize);
     }, []);
 
-    // Apply saved font prefs when editor is ready and content loads
+    // Apply font prefs (defaulting to Calibri 14px) when editor is ready
     useEffect(() => {
         if (!editor) return;
         const prefs = readEditorPrefs();
-        if (!prefs.fontFamily && !prefs.fontSize) return;
-        // Select all and apply the saved font prefs, then deselect
-        editor.chain()
-            .selectAll()
-            .run();
-        if (prefs.fontFamily) editor.chain().focus().setFontFamily(prefs.fontFamily).run();
-        if (prefs.fontSize) (editor.chain().focus() as any).setFontSize(prefs.fontSize).run();
-        // Move cursor to end to deselect
+        const fontFamily = prefs.fontFamily || "Calibri, sans-serif";
+        const fontSize = prefs.fontSize || "14px";
+        editor.chain().selectAll().run();
+        editor.chain().focus().setFontFamily(fontFamily).run();
+        (editor.chain().focus() as any).setFontSize(fontSize).run();
         editor.commands.focus("end");
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editor]);
@@ -170,14 +167,14 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
         lastRecordedRef.current = normalized;
         setHistoryState({ index: 0, length: 1 });
 
-        // Re-apply saved font prefs to the newly loaded content
+        // Re-apply font prefs (Calibri 14px default) to newly loaded content
         const prefs = readEditorPrefs();
-        if (prefs.fontFamily || prefs.fontSize) {
-            editor.chain().selectAll().run();
-            if (prefs.fontFamily) editor.chain().focus().setFontFamily(prefs.fontFamily).run();
-            if (prefs.fontSize) (editor.chain().focus() as any).setFontSize(prefs.fontSize).run();
-            editor.commands.focus("end");
-        }
+        const fontFamily = prefs.fontFamily || "Calibri, sans-serif";
+        const fontSize = prefs.fontSize || "14px";
+        editor.chain().selectAll().run();
+        editor.chain().focus().setFontFamily(fontFamily).run();
+        (editor.chain().focus() as any).setFontSize(fontSize).run();
+        editor.commands.focus("end");
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [content, editor]);
 
@@ -335,7 +332,7 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
     ];
 
     const currentFontSize = editor.getAttributes("textStyle").fontSize || prefFontSize || "14px";
-    const currentFontFamily = editor.getAttributes("textStyle").fontFamily || prefFontFamily || "";
+    const currentFontFamily = editor.getAttributes("textStyle").fontFamily || prefFontFamily || "Calibri, sans-serif";
 
     return (
         <div className="w-full border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xl ring-1 ring-slate-200/50">
@@ -357,7 +354,6 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
                     className="h-7 text-[11px] font-medium text-slate-700 border border-slate-200 rounded-lg px-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer max-w-[110px]"
                     title="Font Family"
                 >
-                    <option value="">Sans Serif</option>
                     {FONT_FAMILIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                 </select>
 
@@ -488,7 +484,7 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
                             onClick={() => setShowMagicMenu(!showMagicMenu)}
                             disabled={isRefining}
                             className={cn(
-                                "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                                "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all",
                                 isRefining ? "bg-indigo-600 text-white animate-pulse" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white"
                             )}
                         >
@@ -501,14 +497,14 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
                                 <div className="fixed inset-0 z-40" onClick={() => setShowMagicMenu(false)} />
                                 <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 p-1.5 animate-in fade-in slide-in-from-top-1 max-h-[65vh] overflow-y-auto">
                                     <div className="px-3 py-2 mb-1 bg-indigo-50 rounded-xl border border-indigo-100">
-                                        <p className="text-[9px] font-black text-indigo-600 uppercase tracking-[0.1em]">
+                                        <p className="text-[9px] font-medium text-indigo-600">
                                             {editor.state.selection.from !== editor.state.selection.to ? "Selection detected" : "Full body mode"}
                                         </p>
                                     </div>
                                     {magicPenCategories.map((cat, idx) => (
                                         <div key={cat.title}>
                                             {idx > 0 && <div className="border-t border-slate-100 my-1" />}
-                                            <p className="text-[9px] font-black text-slate-400 px-3 pt-2 pb-1 uppercase tracking-tighter">{cat.title}</p>
+                                            <p className="text-[9px] font-medium text-slate-400 px-3 pt-2 pb-1">{cat.title}</p>
                                             {cat.items.map(opt => (
                                                 <button
                                                     key={opt.label}
@@ -530,7 +526,7 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
                     <div className="relative">
                         <button
                             onClick={() => setShowVarMenu(!showVarMenu)}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 hover:bg-blue-600 hover:text-white transition-all"
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-slate-100 text-slate-600 hover:bg-blue-600 hover:text-white transition-all"
                         >
                             <Variable className="w-3 h-3" />
                             Add Data
@@ -557,7 +553,7 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
                     <button
                         onClick={() => setIsLivePreview(!isLivePreview)}
                         className={cn(
-                            "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                            "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all",
                             isLivePreview ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700"
                         )}
                     >
@@ -595,7 +591,7 @@ export function RichTextEditor({ content, onChange, onSave, onSend, placeholder,
                 )}
 
                 {isLivePreview && (
-                    <div className="absolute top-3 right-4 bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border border-emerald-200 shadow-sm animate-pulse">
+                    <div className="absolute top-3 right-4 bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-medium border border-emerald-200 shadow-sm animate-pulse">
                         Previewing Live Data
                     </div>
                 )}

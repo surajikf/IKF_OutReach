@@ -7,6 +7,9 @@ const dispatchBatchSchema = z.object({
   campaignIds: z.array(z.string().min(1)).min(1),
   dispatchMode: z.enum(["SEND", "DRAFT"]).optional().default("SEND"),
   userId: z.string().optional(),
+  batchSize: z.number().int().min(1).max(500).optional().default(50),
+  batchDelayMinutes: z.number().min(0).max(60).optional().default(5),
+  scheduledAt: z.string().datetime().nullable().optional(),
 });
 
 export async function POST(request: Request) {

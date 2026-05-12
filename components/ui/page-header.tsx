@@ -20,7 +20,7 @@ export function PageHeader({ title, subtitle, eyebrow, actions, belowTitle, clas
     >
       <div className="space-y-1">
         {eyebrow && (
-          <p className="text-[10px] font-bold uppercase tracking-[.2em] text-blue-600">
+          <p className="text-[10px] font-medium text-blue-600">
             {eyebrow}
           </p>
         )}

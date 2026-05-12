@@ -251,10 +251,10 @@ export function ClientPickerModal({
                                                 <p className={cn("text-sm font-bold truncate", isExcluded ? "text-slate-500" : "text-slate-900")}>
                                                     {client.clientName}
                                                 </p>
-                                                {isExcluded && <span className="text-[9px] font-black bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded uppercase">Excluded</span>}
+                                                {isExcluded && <span className="text-[9px] font-medium bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">Excluded</span>}
                                             </div>
                                             <div className="flex items-center gap-2 mt-0.5">
-                                                <span className="text-[10px] font-black uppercase tracking-tighter text-slate-400">{client.industry}</span>
+                                                <span className="text-[10px] font-medium text-slate-400">{client.industry}</span>
                                                 {client.contactPerson && !isExcluded && (
                                                     <>
                                                         <span className="w-1 h-1 rounded-full bg-slate-300" />
