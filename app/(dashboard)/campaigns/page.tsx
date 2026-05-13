@@ -23,10 +23,7 @@ import {
     EyeOff,
     AlertCircle,
     X,
-    Building2,
-    Mail,
     Database,
-    BookUser,
     ChevronRight,
     Loader2,
     Clock,
@@ -63,40 +60,58 @@ const campaignTypes = [
 
 type AudienceSource = "INVOICE_SYSTEM" | "ZOHO_BIGIN" | "GMAIL" | "GOOGLE_CONTACTS";
 
+const SourceIcon = ({ id, className }: { id: AudienceSource; className?: string }) => {
+    if (id === "INVOICE_SYSTEM") return <Database className={cn("text-indigo-500", className)} />;
+    if (id === "ZOHO_BIGIN") return (
+        <svg className={cn("shrink-0", className)} viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="128" cy="128" r="128" fill="#E42527"/>
+            <path d="M60 88h88L60 168v16h136v-24h-88l88-80V72H60z" fill="#fff"/>
+        </svg>
+    );
+    if (id === "GMAIL") return (
+        <svg className={cn("shrink-0", className)} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4.6 3H6v.9L12 8.5l6-4.6V3h1.4C20.84 3 22 4.16 22 5.6V6L12 13.5 2 6v-.4C2 4.16 3.16 3 4.6 3z" fill="#C5221F"/>
+            <path d="M2 6l10 7.5L22 6v12.4C22 19.84 20.84 21 19.4 21H4.6C3.16 21 2 19.84 2 18.4V6z" fill="#EA4335"/>
+        </svg>
+    );
+    if (id === "GOOGLE_CONTACTS") return (
+        <svg className={cn("shrink-0", className)} viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <path d="M24 24c4.97 0 9-4.03 9-9s-4.03-9-9-9-9 4.03-9 9 4.03 9 9 9zm0 4.5c-6.01 0-18 3.01-18 9V42h36v-4.5c0-5.99-11.99-9-18-9z" fill="#34A853"/>
+            <path d="M36 6v6h-6v4h6v6h4v-6h6v-4h-6V6z" fill="#1A73E8"/>
+        </svg>
+    );
+    return null;
+};
+
 const audienceSourceOptions: Array<{
     id: AudienceSource;
     name: string;
     desc: string;
     note: string;
-    icon: any;
 }> = [
     {
         id: "INVOICE_SYSTEM",
         name: "Invoice",
         desc: "Use contacts from invoice records.",
         note: "Includes invoice & service history.",
-        icon: Database,
     },
     {
         id: "ZOHO_BIGIN",
         name: "Zoho Bigin",
-        desc: "Use contacts from Zoho CRM.",
+        desc: "Use contacts from Zoho Bigin.",
         note: "CRM fields & stages only.",
-        icon: Building2,
     },
     {
         id: "GMAIL",
         name: "Gmail",
         desc: "Use contacts synced from Gmail.",
         note: "Email contacts only, no invoice data.",
-        icon: Mail,
     },
     {
         id: "GOOGLE_CONTACTS",
         name: "Google Contacts",
         desc: "Use contacts from your Google directory.",
         note: "Directory contacts with email addresses.",
-        icon: BookUser,
     },
 ];
 
@@ -253,6 +268,7 @@ export default function CampaignGenerator() {
     // Audience Oversight State
     const [excludedClientIds, setExcludedClientIds] = useState<string[]>([]);
     const [showOversightModal, setShowOversightModal] = useState(false);
+    const [googleContactsCount, setGoogleContactsCount] = useState<number | null>(null);
 
     // Phase 2: Ultra-Smart states
     const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
@@ -409,6 +425,15 @@ export default function CampaignGenerator() {
             excludedClientIds,
         });
     }, [sessionHydrated, audienceSources, selectedType, topic, coreMessage, cta, selectedServices, serviceLogic, excludedClientIds]);
+
+    useEffect(() => {
+        fetch(apiPath("/clients?source=GOOGLE_CONTACTS&pageSize=1"))
+            .then((r) => r.json())
+            .then((data) => {
+                if (data.success) setGoogleContactsCount(data.data?.sourceStats?.GOOGLE_CONTACTS?.total ?? data.data?.total ?? null);
+            })
+            .catch(() => {});
+    }, []);
 
     useEffect(() => {
         fetch(apiPath("/services"))
@@ -1155,20 +1180,26 @@ export default function CampaignGenerator() {
                         <div className="px-4 sm:px-5 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                             <h3 className="text-sm font-semibold text-slate-900">0. Select Audience Source</h3>
                         </div>
-                        <div className="p-4 sm:p-5 md:p-6 grid grid-cols-2 xl:grid-cols-4 gap-3">
-                            {audienceSourceOptions.map((source) => (
-                                <button key={source.id} type="button" onClick={() => toggleAudienceSource(source.id)} className={cn("text-left p-3.5 rounded-lg border transition-all", audienceSources.includes(source.id) ? "bg-blue-50/60 border-blue-500 ring-1 ring-blue-500" : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50")}>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-2">
-                                            <source.icon className={cn("w-4 h-4 shrink-0", audienceSources.includes(source.id) ? "text-blue-600" : "text-slate-400")} />
-                                            <h4 className="text-xs font-semibold text-slate-900 leading-tight">{source.name}</h4>
+                        <div className="p-4 sm:p-5 md:p-6 flex gap-3">
+                            {audienceSourceOptions.map((source) => {
+                                const isSelected = audienceSources.includes(source.id);
+                                const noteText = source.id === "GOOGLE_CONTACTS"
+                                    ? googleContactsCount === null
+                                        ? "Contacts with email addresses."
+                                        : `${googleContactsCount.toLocaleString()} contact${googleContactsCount !== 1 ? "s" : ""} with emails synced.`
+                                    : source.note;
+                                return (
+                                    <button key={source.id} type="button" onClick={() => toggleAudienceSource(source.id)} className={cn("flex-1 text-left p-3.5 rounded-lg border transition-all", isSelected ? "bg-blue-50/60 border-blue-500 ring-1 ring-blue-500" : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50")}>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <SourceIcon id={source.id} className="w-4 h-4 shrink-0" />
+                                            <h4 className="text-xs font-semibold text-slate-900 leading-tight flex-1">{source.name}</h4>
+                                            {isSelected && <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />}
                                         </div>
-                                        {audienceSources.includes(source.id) && <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />}
-                                    </div>
-                                    <p className="text-[10px] text-slate-500 leading-relaxed">{source.desc}</p>
-                                    <p className="text-[10px] font-medium text-blue-500 mt-1.5 leading-snug">{source.note}</p>
-                                </button>
-                            ))}
+                                        <p className="text-[10px] text-slate-500 leading-relaxed">{source.desc}</p>
+                                        <p className="text-[10px] font-medium text-blue-500 mt-1.5 leading-snug">{noteText}</p>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 

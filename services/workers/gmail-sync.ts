@@ -244,7 +244,7 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
   const folderQuery = allFolderClauses.length > 1
     ? `{${allFolderClauses.join(" ")}}`
     : allFolderClauses[0] || "in:inbox";
-  const gmailQuery = `after:2024/01/01 ${folderQuery}`;
+  const gmailQuery = `after:2024/01/01 ${folderQuery} -in:spam -in:trash`;
 
   const messagesRes = await fetch(
     `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=40&q=${encodeURIComponent(gmailQuery)}`,
@@ -354,22 +354,44 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
   }
 
   if (cleanupMode === "safe_cleanup") {
-    // Safe cleanup: only mark clearly out-of-scope records as blocked.
-    // This is intentionally non-destructive and reversible.
-    const excludedDomains = Array.from(syncOptions.excludedDomains.values()).map((d) => d.trim().toLowerCase()).filter(Boolean);
-    if (excludedDomains.length > 0) {
-      for (const domain of excludedDomains) {
+    // Block contacts whose import channel was removed from the sync scope.
+    // Only block contacts that came exclusively from the removed folder(s) — contacts
+    // that also appear in a still-active folder are left untouched.
+    const allChannels = ["gmail_inbox", "gmail_sent"] as const;
+    const activeChannels: string[] = [];
+    if (syncOptions.sourceFolders.includes("INBOX")) activeChannels.push("gmail_inbox");
+    if (syncOptions.sourceFolders.includes("SENT")) activeChannels.push("gmail_sent");
+    const removedChannels = allChannels.filter((c) => !activeChannels.includes(c));
+
+    if (removedChannels.length > 0) {
+      const gmailContacts = await prisma.client.findMany({
+        where: { source: "GMAIL", gmailSourceAccount: account.email, isBlocked: false },
+        select: { id: true, metadata: true },
+      });
+
+      const idsToBlock = gmailContacts
+        .filter((c) => {
+          const meta = c.metadata as any;
+          const channels: string[] = Array.isArray(meta?.importChannels) ? meta.importChannels : [];
+          return channels.length > 0 && channels.every((ch) => removedChannels.includes(ch as any));
+        })
+        .map((c) => c.id);
+
+      if (idsToBlock.length > 0) {
         await prisma.client.updateMany({
-          where: {
-            source: "GMAIL",
-            gmailSourceAccount: account.email,
-            email: { endsWith: `@${domain}` },
-          },
+          where: { id: { in: idsToBlock } },
           data: { isBlocked: true },
-        }).catch(() => {
-          // non-fatal
-        });
+        }).catch(() => {});
       }
+    }
+
+    // Also block by excluded domains.
+    const excludedDomains = Array.from(syncOptions.excludedDomains.values()).map((d) => d.trim().toLowerCase()).filter(Boolean);
+    for (const domain of excludedDomains) {
+      await prisma.client.updateMany({
+        where: { source: "GMAIL", gmailSourceAccount: account.email, email: { endsWith: `@${domain}` } },
+        data: { isBlocked: true },
+      }).catch(() => {});
     }
   }
 

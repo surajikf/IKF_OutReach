@@ -41,7 +41,7 @@ import { cn } from "@/lib/shared/utils";
 import { SmartLoader } from "@/components/layout/SmartLoader";
 import { PageHeader } from "@/components/ui/page-header";
 import { apiPath } from "@/lib/app-path";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 
 const MASK = "••••••••••••••••";
 
@@ -84,8 +84,40 @@ export default function SettingsPage() {
     const [formData, setFormData] = useState(defaultSettings);
     const [activeTab, setActiveTab] = useState<"GMAIL" | "SMTP">("GMAIL");
 
+    const startGmailConnect = () => {
+        const label = (session?.user?.name || session?.user?.email || "gmail").toString().trim();
+        const params = new URLSearchParams({
+            intent: "both",
+            returnTo: "/settings",
+            label,
+        });
+        window.location.href = apiPath(`/auth/google?${params.toString()}`);
+    };
+
     useEffect(() => {
         fetchSettings();
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const params = new URLSearchParams(window.location.search);
+        const auth = params.get("auth");
+        const reason = params.get("reason");
+        if (!auth) return;
+
+        if (auth === "success") {
+            toast.success("Gmail account connected.");
+            fetchSettings();
+        } else if (auth === "error") {
+            toast.error(reason ? `Gmail connect failed: ${reason}` : "Gmail connect failed.");
+        }
+
+        params.delete("auth");
+        params.delete("reason");
+        params.delete("gmail_email");
+        params.delete("gmail_sync_profile");
+        const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
+        window.history.replaceState({}, "", nextUrl);
     }, []);
 
     const toggleKeyVisibility = (field: string) => {
@@ -257,8 +289,8 @@ export default function SettingsPage() {
                             
                             <div className="flex items-center gap-3 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-100">
                                 <div className="flex flex-col">
-                                    <span className="text-[10px] font-medium text-slate-900">Auto-Backup (SMTP)</span>
-                                    <span className="text-[9px] text-slate-500 font-medium">Switches on failure</span>
+                                    <span className="text-[10px] font-medium text-slate-900">SMTP Backup</span>
+                                    <span className="text-[9px] text-slate-500 font-medium">Use SMTP if Gmail send fails</span>
                                 </div>
                                 <button
                                     type="button"
@@ -317,25 +349,25 @@ export default function SettingsPage() {
                                                 Sender Accounts
                                             </h4>
                                             {formData.emailProvider === "GMAIL" ? (
-                                                <span className="text-[10px] font-bold bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-md border border-emerald-100">Primary Channel</span>
+                                                <span className="text-[10px] font-bold bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-md border border-emerald-100">Default Sender</span>
                                             ) : (
                                                 <button
                                                     type="button"
                                                     onClick={() => setFormData({ ...formData, emailProvider: "GMAIL" })}
                                                     className="text-[10px] font-bold text-blue-600 hover:bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100 transition-all"
                                                 >
-                                                    Set as Primary
+                                                    Make Default
                                                 </button>
                                             )}
                                         </div>
                                         <div className="flex items-center gap-3">
                                             <button 
                                                 type="button"
-                                                onClick={() => signIn("google", { callbackUrl: "/settings" })}
+                                                onClick={startGmailConnect}
                                                 className="text-xs font-bold bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2"
                                             >
                                                 <UserPlus className="w-4 h-4" />
-                                                Connect Gmail
+                                                Add Gmail Account
                                             </button>
                                             <button 
                                                 type="button"
@@ -371,7 +403,7 @@ export default function SettingsPage() {
                                                             <div className="flex items-center gap-2">
                                                                 <span className="text-xs font-semibold text-slate-900">{account.accountName}</span>
                                                                 {account.isDefault && <span className="text-[9px] font-semibold bg-blue-600 text-white px-2 py-0.5 rounded-full">Primary</span>}
-                                                                {!account.scopeGranted && <span className="text-[9px] font-semibold bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full border border-amber-200">Invalid Scope</span>}
+                                                                {!account.scopeGranted && <span className="text-[9px] font-semibold bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full border border-amber-200">Permissions Need Update</span>}
                                                             </div>
                                                             <p className="text-xs font-medium text-slate-500 font-mono lower">{account.email}</p>
                                                             <div className="flex items-center gap-3 mt-1.5">
@@ -384,7 +416,7 @@ export default function SettingsPage() {
                                                                     account.lastStatus === "HEALTHY" ? "text-emerald-500" : "text-slate-400"
                                                                 )}>
                                                                     <Activity className="w-3 h-3" />
-                                                                    Status: {account.lastStatus || "IDLE"}
+                                                                    Connection: {account.lastStatus || "IDLE"}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -398,11 +430,11 @@ export default function SettingsPage() {
                                                                         method: "POST", headers: { "Content-Type": "application/json" },
                                                                         body: JSON.stringify({ accountId: account.id })
                                                                     });
-                                                                    if ((await res.json()).success) { toast.success("Identity promoted."); fetchSettings(); }
+                                                                    if ((await res.json()).success) { toast.success("Default sender updated."); fetchSettings(); }
                                                                 }}
                                                                 className="text-[9px] font-medium text-slate-500 hover:text-blue-600 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-blue-200 transition-all font-mono"
                                                             >
-                                                                [PROMOTE]
+                                                                Make Default
                                                             </button>
                                                         )}
                                                         <button
@@ -418,11 +450,11 @@ export default function SettingsPage() {
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="text-center py-20 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200 group hover:border-blue-300 transition-all cursor-pointer" onClick={() => signIn("google", { callbackUrl: "/settings" })}>
+                                        <div className="text-center py-20 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200 group hover:border-blue-300 transition-all cursor-pointer" onClick={startGmailConnect}>
                                             <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100 mx-auto mb-4 group-hover:scale-110 transition-transform">
                                                 <Mail className="w-8 h-8 text-slate-300 group-hover:text-blue-500 transition-colors" />
                                             </div>
-                                            <p className="text-sm font-bold text-slate-900">No accounts connected</p>
+                                            <p className="text-sm font-bold text-slate-900">No Gmail accounts connected</p>
                                             <p className="text-xs text-slate-500 mt-1">Click to connect your first Gmail account for outreach.</p>
                                         </div>
                                     )}

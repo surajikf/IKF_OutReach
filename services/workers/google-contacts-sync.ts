@@ -141,9 +141,19 @@ export async function runGoogleContactsSync(accountId: string) {
       });
       synced += 1;
     } catch (e: any) {
-      // P2002: email already owned by another user — skip silently, count as conflict
       if (e?.code === "P2002") {
-        conflicts += 1;
+        // Email already exists under a different externalId (e.g. synced from Gmail inbox/sent).
+        // The upsert's CREATE leg failed the email unique constraint. We still need to tag that
+        // existing record with "google_contacts" in importChannels so the count and filter work.
+        const updated = await prisma.client.updateMany({
+          where: { email: c.email, userId: account.userId },
+          data: { metadata: meta },
+        }).catch(() => null);
+        if (updated && updated.count > 0) {
+          synced += 1;
+        } else {
+          conflicts += 1;
+        }
       } else {
         throw e;
       }

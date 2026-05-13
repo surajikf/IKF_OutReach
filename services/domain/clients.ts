@@ -15,6 +15,7 @@ export interface ListClientsParams {
   page?: number;
   pageSize?: number;
   userId?: string;
+  googleContactsOnly?: boolean;
 }
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -34,6 +35,7 @@ export async function listClients(params: ListClientsParams) {
     page = 1,
     pageSize: rawPageSize = DEFAULT_PAGE_SIZE,
     userId,
+    googleContactsOnly = false,
   } = params;
 
   const pageSize = Math.min(Math.max(rawPageSize || DEFAULT_PAGE_SIZE, MIN_PAGE_SIZE), MAX_PAGE_SIZE);
@@ -44,6 +46,9 @@ export async function listClients(params: ListClientsParams) {
     ...(industries.length > 0 && { industry: { in: industries } }),
     ...(levels.length > 0 && { relationshipLevel: { in: levels } }),
     ...(sources.length > 0 && { source: { in: sources as any } }),
+    ...(googleContactsOnly && {
+      metadata: { path: ["importChannels"], array_contains: "google_contacts" as any },
+    }),
     isRoleBased: showRoleBased,
     ...(serviceIds.length > 0 && {
       services: {

@@ -72,17 +72,22 @@ export async function GET(request: Request) {
         const session = await getBackendSession(request);
         const userId = session?.user?.id;
         const isAdmin = session?.user?.role === "ADMIN";
-        // Each user (including admins) manages their own client list — no cross-user visibility.
-        const scopedUserId = userId;
+        // Admins can view full portfolio; regular users are scoped to their own client list.
+        const scopedUserId = isAdmin ? undefined : userId;
         const { searchParams } = new URL(request.url);
         const industries = searchParams.getAll("industry");
         const levels = searchParams.getAll("level");
         const serviceIds = searchParams.getAll("service");
         const requestedSources = searchParams.getAll("source");
         const canUseInvoice = await hasInvoiceAccess(request);
-        const sources = requestedSources.length > 0
+        const allowedRequestedSources = requestedSources.length > 0
             ? requestedSources.filter((s) => canUseInvoice || s !== "INVOICE_SYSTEM")
             : (canUseInvoice ? [] : ["ZOHO_BIGIN", "GMAIL", "MANUAL"]);
+        const wantsGoogleContacts = allowedRequestedSources.includes("GOOGLE_CONTACTS");
+        const sources = allowedRequestedSources.filter((s) => s !== "GOOGLE_CONTACTS");
+        if (wantsGoogleContacts && !sources.includes("GMAIL")) {
+            sources.push("GMAIL");
+        }
         const showRoleBased = (searchParams.get("roleBased") === "true") || (searchParams.get("showRoleBased") === "true");
         const isSmartView = searchParams.get("smart") === "true";
         const search = searchParams.get("search")?.trim() || "";
@@ -95,7 +100,7 @@ export async function GET(request: Request) {
         // Fetch granular source stats for the mini dashboard
         const userScope = scopedUserId ? { userId: scopedUserId } : {};
         const statsBaseWhere: any = { ...userScope, ...(canUseInvoice ? {} : { source: { not: "INVOICE_SYSTEM" } }) };
-        const [sourceStatsRaw, gmailStatsRaw, gmailAccounts] = await Promise.all([
+        const [sourceStatsRaw, gmailStatsRaw, gmailAccounts, googleContactsStatsRaw] = await Promise.all([
             prisma.client.groupBy({
                 by: ['source', 'relationshipLevel'],
                 _count: { _all: true },
@@ -109,6 +114,15 @@ export async function GET(request: Request) {
             prisma.gmailAccount.findMany({
                 where: userId ? { userId } : undefined,
                 select: { accountName: true, email: true }
+            }),
+            prisma.client.groupBy({
+                by: ['relationshipLevel'],
+                _count: { _all: true },
+                where: {
+                    ...statsBaseWhere,
+                    source: 'GMAIL',
+                    metadata: { path: ["importChannels"], array_contains: "google_contacts" },
+                },
             }),
         ]);
 
@@ -134,6 +148,14 @@ export async function GET(request: Request) {
                 acc[resolvedKey] = (acc[resolvedKey] || 0) + curr._count._all;
                 return acc;
             }, {});
+        }
+        if (googleContactsStatsRaw.length > 0) {
+            sourceStats['GOOGLE_CONTACTS'] = googleContactsStatsRaw.reduce((acc: any, curr: any) => {
+                acc.total += curr._count._all;
+                if (curr.relationshipLevel === "Active") acc.active += curr._count._all;
+                else acc.inactive += curr._count._all;
+                return acc;
+            }, { total: 0, active: 0, inactive: 0 });
         }
 
         // Add Zoho specifics (Tags breakdown for the mini-dashboard tooltips)
@@ -212,6 +234,7 @@ export async function GET(request: Request) {
             page,
             pageSize: pageSizeRaw,
             userId: scopedUserId,
+            googleContactsOnly: wantsGoogleContacts,
         });
 
         const emails = clients

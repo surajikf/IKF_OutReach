@@ -83,7 +83,7 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onTo
                             ))}
                     </div>
                 </td>
-                <td className="px-6 py-5 align-top">
+                <td className="px-6 py-5 align-top" title="Date this contact was last reached via an AI campaign or manual message.">
                     {contact.lastContacted ? (
                         <span className="text-[11px] font-medium text-slate-700">
                             {new Date(contact.lastContacted).toLocaleDateString(undefined, {
@@ -94,17 +94,6 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onTo
                         </span>
                     ) : (
                         <span className="text-xs font-medium text-slate-400 italic">No outreach yet</span>
-                    )}
-                </td>
-                <td className="px-6 py-5 align-top">
-                    {contact.lastContacted ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-[10px] font-semibold text-blue-700 border border-blue-100">
-                            Contacted
-                        </span>
-                    ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-50 text-[10px] font-semibold text-slate-400 border border-slate-200">
-                            Not Yet
-                        </span>
                     )}
                 </td>
                 <td className="px-6 py-5 align-top">
@@ -407,7 +396,7 @@ ClientRow.displayName = "ClientRow";
 
 export default function ClientManager() {
     const [view, setView] = useState<"clients" | "services" | "rolebased">("clients");
-    const [activeSourceTab, setActiveSourceTab] = useState<"ALL" | "INVOICE" | "ZOHO" | "GMAIL">("ALL");
+    const [activeSourceTab, setActiveSourceTab] = useState<"ALL" | "INVOICE" | "ZOHO" | "GMAIL" | "GOOGLE_CONTACTS">("ALL");
     const [clients, setClients] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
@@ -432,6 +421,9 @@ export default function ClientManager() {
     const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
     const [editingService, setEditingService] = useState<any>(null);
     const [newServiceData, setNewServiceData] = useState({ serviceName: "", category: "Digital", description: "" });
+    const [serviceSearch, setServiceSearch] = useState("");
+    const [serviceCategoryFilter, setServiceCategoryFilter] = useState("ALL");
+    const [serviceSort, setServiceSort] = useState<"name_asc" | "name_desc" | "category">("name_asc");
 
     const abortControllerRef = useRef<AbortController | null>(null);
     const initialLoadRef = useRef(true);
@@ -451,6 +443,7 @@ export default function ClientManager() {
 
     useEffect(() => {
         if (!initialLoadRef.current) {
+            if (view === "services") return;
             console.log("🔄 Filter update trigger");
             fetchClients();
         }
@@ -677,24 +670,27 @@ export default function ClientManager() {
         setPage(1);
     };
 
-    const handleSourceTab = (tab: "ALL" | "INVOICE" | "ZOHO" | "GMAIL") => {
+    const handleSourceTab = (tab: "ALL" | "INVOICE" | "ZOHO" | "GMAIL" | "GOOGLE_CONTACTS") => {
         setActiveSourceTab(tab);
         setPage(1);
         if (tab === "ALL") setFilterSource([]);
         else if (tab === "INVOICE") setFilterSource(["INVOICE_SYSTEM"]);
         else if (tab === "ZOHO") setFilterSource(["ZOHO_BIGIN"]);
         else if (tab === "GMAIL") setFilterSource(["GMAIL"]);
+        else if (tab === "GOOGLE_CONTACTS") setFilterSource(["GOOGLE_CONTACTS"]);
     };
 
     const activeFilterCount = filterIndustry.length + filterLevel.length + filterService.length + filterSource.length;
     const hasAnyGmailRows = filteredClients.some((c) => c?.source === "GMAIL");
     const isAutoGmailOnlyDataset = filteredClients.length > 0 && filteredClients.every((c) => c?.source === "GMAIL");
-    const isSimpleGmailView = (filterSource.length === 1 && filterSource[0] === "GMAIL") || isAutoGmailOnlyDataset;
+    const isSimpleGmailView =
+        (filterSource.length === 1 && (filterSource[0] === "GMAIL" || filterSource[0] === "GOOGLE_CONTACTS")) ||
+        isAutoGmailOnlyDataset;
     const hasAnyInvoiceRows = filteredClients.some((c) => c?.source === "INVOICE_SYSTEM");
     const isAutoInvoiceOnlyDataset = filteredClients.length > 0 && filteredClients.every((c) => c?.source === "INVOICE_SYSTEM");
     const isInvoiceFocusedView = (filterSource.length === 1 && filterSource[0] === "INVOICE_SYSTEM") || isAutoInvoiceOnlyDataset;
     const showServicesColumn = !isSimpleGmailView && isInvoiceFocusedView && hasAnyInvoiceRows;
-    const showEngagementColumn = activeSourceTab !== "GMAIL";
+    const showEngagementColumn = activeSourceTab !== "GMAIL" && activeSourceTab !== "GOOGLE_CONTACTS";
     const showSourceColumn = activeSourceTab === "ALL";
     const tableColumnCount = isSimpleGmailView ? 5 : (showServicesColumn ? 8 : 7) - (showEngagementColumn ? 0 : 1) - (showSourceColumn ? 0 : 1);
     const gmailRowsWithoutInvoiceServices = filteredClients.filter((c) => c?.source === "GMAIL").length;
@@ -717,6 +713,48 @@ export default function ClientManager() {
             { label: "Outreach Due", value: due, icon: AlertCircle, color: "text-rose-600", bg: "bg-rose-50" },
         ];
     }, [clients]);
+
+    const serviceCategories = useMemo(() => {
+        const categories = Array.from(
+            new Set(
+                services
+                    .map((service: any) => service?.category?.trim())
+                    .filter((category: string | undefined): category is string => !!category)
+            )
+        ).sort((a, b) => a.localeCompare(b));
+        return ["ALL", ...categories];
+    }, [services]);
+
+    const filteredServices = useMemo(() => {
+        const query = serviceSearch.trim().toLowerCase();
+        const byText = (services || []).filter((service: any) => {
+            if (!query) return true;
+            const name = String(service?.serviceName || "").toLowerCase();
+            const desc = String(service?.description || "").toLowerCase();
+            const category = String(service?.category || "").toLowerCase();
+            return name.includes(query) || desc.includes(query) || category.includes(query);
+        });
+
+        const byCategory =
+            serviceCategoryFilter === "ALL"
+                ? byText
+                : byText.filter((service: any) => service?.category === serviceCategoryFilter);
+
+        return [...byCategory].sort((a: any, b: any) => {
+            if (serviceSort === "category") {
+                return String(a?.category || "").localeCompare(String(b?.category || ""));
+            }
+            if (serviceSort === "name_desc") {
+                return String(b?.serviceName || "").localeCompare(String(a?.serviceName || ""));
+            }
+            return String(a?.serviceName || "").localeCompare(String(b?.serviceName || ""));
+        });
+    }, [services, serviceSearch, serviceCategoryFilter, serviceSort]);
+
+    const servicesWithoutDescription = useMemo(
+        () => filteredServices.filter((service: any) => !String(service?.description || "").trim()).length,
+        [filteredServices]
+    );
 
     const FilterPopover = ({ label, options, selected, onToggle, icon: Icon, stats }: any) => {
         const [isOpen, setIsOpen] = useState(false);
@@ -861,19 +899,45 @@ export default function ClientManager() {
                         <>
                             <div className="w-px h-5 bg-slate-200" />
                             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-                        {(["ALL", "INVOICE", "ZOHO", "GMAIL"] as const).map((tab) => {
-                            const tabLabels: Record<string, string> = { ALL: "All Clients", INVOICE: "Invoice", ZOHO: "Zoho CRM", GMAIL: "Gmail" };
-                            const tabIcons: Record<string, any> = { ALL: Database, INVOICE: DownloadCloud, ZOHO: Database, GMAIL: Mail };
+                        {(["ALL", "INVOICE", "ZOHO", "GMAIL", "GOOGLE_CONTACTS"] as const).map((tab) => {
+                            const tabLabels: Record<string, string> = { ALL: "All Clients", INVOICE: "Invoice", ZOHO: "Zoho Bigin", GMAIL: "Gmail", GOOGLE_CONTACTS: "Google Contacts" };
                             const tabColors: Record<string, string> = {
                                 ALL: "text-slate-700",
                                 INVOICE: "text-indigo-600",
-                                ZOHO: "text-amber-600",
-                                GMAIL: "text-rose-600",
+                                ZOHO: "text-[#E42527]",
+                                GMAIL: "text-[#EA4335]",
+                                GOOGLE_CONTACTS: "text-[#34A853]",
                             };
                             const sourceKey = tab === "INVOICE" ? "INVOICE_SYSTEM" : tab === "ZOHO" ? "ZOHO_BIGIN" : tab;
                             const count = tab === "ALL" ? Object.values(sourceStats).reduce((a: any, b: any) => a + (b?.total || 0), 0) : (sourceStats[sourceKey]?.total ?? null);
-                            const Icon = tabIcons[tab];
                             const isActive = activeSourceTab === tab;
+                            const TabIcon = () => {
+                                if (tab === "ALL") return <Database className="w-3.5 h-3.5 shrink-0" />;
+                                if (tab === "INVOICE") return <DownloadCloud className="w-3.5 h-3.5 shrink-0 text-indigo-500" />;
+                                if (tab === "ZOHO") return (
+                                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+                                        <circle cx="128" cy="128" r="128" fill="#E42527"/>
+                                        <path d="M60 88h88L60 168v16h136v-24h-88l88-80V72H60z" fill="#fff"/>
+                                    </svg>
+                                );
+                                if (tab === "GMAIL") return (
+                                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M6 18V8.4L12 13l6-4.6V18H6zm0-11.6L12 11l6-4.6V6a.6.6 0 0 0-.6-.6H6.6A.6.6 0 0 0 6 6v.4z" fill="#EA4335"/>
+                                        <path d="M18 18V6.6L12 11 6 6.6V18h12z" fill="#FBBC05" opacity=".2"/>
+                                        <path d="M2 5.6C2 4.16 3.16 3 4.6 3H6v2.4L12 10l6-4.6V3h1.4C20.84 3 22 4.16 22 5.6V18.4c0 1.44-1.16 2.6-2.6 2.6H4.6C3.16 21 2 19.84 2 18.4V5.6z" fill="none"/>
+                                        <path d="M2 6l10 7.5L22 6" stroke="#EA4335" strokeWidth="2" fill="none"/>
+                                        <path d="M2 6v12.4C2 19.84 3.16 21 4.6 21h14.8C20.84 21 22 19.84 22 18.4V6L12 13.5 2 6z" fill="#EA4335"/>
+                                        <path d="M4.6 3H6v.9L12 8.5l6-4.6V3h1.4C20.84 3 22 4.16 22 5.6V6L12 13.5 2 6v-.4C2 4.16 3.16 3 4.6 3z" fill="#C5221F"/>
+                                    </svg>
+                                );
+                                if (tab === "GOOGLE_CONTACTS") return (
+                                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M24 24c4.97 0 9-4.03 9-9s-4.03-9-9-9-9 4.03-9 9 4.03 9 9 9zm0 4.5c-6.01 0-18 3.01-18 9V42h36v-4.5c0-5.99-11.99-9-18-9z" fill="#34A853"/>
+                                        <path d="M36 6v6h-6v4h6v6h4v-6h6v-4h-6V6z" fill="#1A73E8"/>
+                                    </svg>
+                                );
+                                return null;
+                            };
                             return (
                                 <button
                                     key={tab}
@@ -885,7 +949,7 @@ export default function ClientManager() {
                                             : "text-slate-500 hover:text-slate-700"
                                     )}
                                 >
-                                    <Icon className="w-3.5 h-3.5" />
+                                    <TabIcon />
                                     {tabLabels[tab]}
                                     {count !== null && count > 0 && (
                                         <span className={cn(
@@ -951,6 +1015,7 @@ export default function ClientManager() {
                                     options={[
                                         { label: "Zoho", value: "ZOHO_BIGIN" },
                                         { label: "Gmail", value: "GMAIL" },
+                                        { label: "Google Contacts", value: "GOOGLE_CONTACTS" },
                                         { label: "Invoice", value: "INVOICE_SYSTEM" },
                                     ]}
                                     selected={filterSource}
@@ -1034,8 +1099,7 @@ export default function ClientManager() {
                                         <>
                                             <th className="px-4 py-4 font-medium text-slate-400 w-[28%]">Name</th>
                                             <th className="px-4 py-4 font-medium text-slate-400 w-[35%]">Email</th>
-                                            <th className="px-4 py-4 font-medium text-slate-400 w-[22%]">Last Outreach</th>
-                                            <th className="px-4 py-4 font-medium text-slate-400 w-[10%]">Contacted</th>
+                                            <th className="px-4 py-4 font-medium text-slate-400 w-[32%]" title="Date this contact was last reached via an AI campaign or manual message.">Last Outreach</th>
                                             <th className="px-4 py-4 w-14"></th>
                                         </>
                                     ) : (
@@ -1188,36 +1252,135 @@ export default function ClientManager() {
                     </div>
                 </>
             ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    {services.map((service) => (
-                        <div key={service.id} className="group bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all space-y-4">
-                            <div className="flex items-center justify-between">
-                                <div className="text-[10px] font-medium text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">
-                                    {service.category || "General"}
-                                </div>
-                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="sticky top-3 z-30 flex flex-col gap-3 bg-white/90 backdrop-blur-xl p-4 rounded-2xl border border-slate-200/60 shadow-[0_4px_20px_rgb(0,0,0,0.04)]">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex-1 min-w-[220px] flex items-center gap-3 px-4 py-2.5 bg-slate-100/50 rounded-xl border border-transparent focus-within:bg-white focus-within:border-blue-500/30 focus-within:ring-4 focus-within:ring-blue-50/50 transition-all">
+                                <Search className="w-4 h-4 text-slate-400" />
+                                <input
+                                    type="text"
+                                    value={serviceSearch}
+                                    onChange={(e) => setServiceSearch(e.target.value)}
+                                    placeholder="Search service name, category, or description..."
+                                    className="w-full bg-transparent border-none outline-none text-xs font-semibold text-slate-900 placeholder:text-slate-400"
+                                />
+                                {serviceSearch && (
                                     <button
-                                        onClick={() => { setEditingService(service); setNewServiceData({ serviceName: service.serviceName, category: service.category || "Digital", description: service.description || "" }); setIsServiceModalOpen(true); }}
-                                        className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-50 rounded-md"
+                                        type="button"
+                                        aria-label="Clear service search"
+                                        onClick={() => setServiceSearch("")}
+                                        className="p-1 rounded-md text-slate-400 hover:bg-slate-200"
                                     >
-                                        <Edit3 className="w-3.5 h-3.5" />
+                                        <X className="w-3.5 h-3.5" />
                                     </button>
-                                    <button
-                                        onClick={() => setServiceToDelete(service.id)}
-                                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"
-                                    >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
+                                )}
                             </div>
-                            <div className="space-y-1">
-                                <h4 className="font-bold text-slate-900 tracking-tight">{service.serviceName}</h4>
-                                <p className="text-xs text-slate-500 font-medium leading-relaxed line-clamp-2">
-                                    {service.description || "No description provided for this service node."}
-                                </p>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                                <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl">
+                                    <Tag className="w-3.5 h-3.5 text-slate-400" />
+                                    <select
+                                        value={serviceCategoryFilter}
+                                        onChange={(e) => setServiceCategoryFilter(e.target.value)}
+                                        className="bg-transparent text-xs font-semibold text-slate-700 outline-none pr-1"
+                                        aria-label="Filter services by category"
+                                    >
+                                        {serviceCategories.map((category) => (
+                                            <option key={category} value={category}>
+                                                {category === "ALL" ? "All Categories" : category}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-xl">
+                                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                                    <select
+                                        value={serviceSort}
+                                        onChange={(e) => setServiceSort(e.target.value as "name_asc" | "name_desc" | "category")}
+                                        className="bg-transparent text-xs font-semibold text-slate-700 outline-none pr-1"
+                                        aria-label="Sort services"
+                                    >
+                                        <option value="name_asc">Name (A to Z)</option>
+                                        <option value="name_desc">Name (Z to A)</option>
+                                        <option value="category">Category</option>
+                                    </select>
+                                </div>
+                                {(serviceSearch || serviceCategoryFilter !== "ALL" || serviceSort !== "name_asc") && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setServiceSearch("");
+                                            setServiceCategoryFilter("ALL");
+                                            setServiceSort("name_asc");
+                                        }}
+                                        className="px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition-all"
+                                    >
+                                        Reset
+                                    </button>
+                                )}
                             </div>
                         </div>
-                    ))}
+
+                        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                            <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-semibold border border-slate-200">
+                                {filteredServices.length} services
+                            </span>
+                            <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 font-semibold border border-blue-100">
+                                {Math.max(serviceCategories.length - 1, 0)} categories
+                            </span>
+                            <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 font-semibold border border-amber-100">
+                                {servicesWithoutDescription} missing description
+                            </span>
+                        </div>
+                    </div>
+
+                    {filteredServices.length === 0 ? (
+                        <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
+                            <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center mb-4">
+                                <Search className="w-5 h-5 text-slate-400" />
+                            </div>
+                            <h4 className="text-sm font-semibold text-slate-900">No services match current filters</h4>
+                            <p className="text-xs text-slate-500 mt-1">Adjust search or category filter to see results.</p>
+                        </div>
+                    ) : (
+                        <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                            {filteredServices.map((service) => (
+                                <div key={service.id} className="group bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all space-y-2.5">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">
+                                            {service.category || "General"}
+                                        </div>
+                                        <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
+                                            <button
+                                                type="button"
+                                                aria-label={`Edit ${service.serviceName}`}
+                                                onClick={() => { setEditingService(service); setNewServiceData({ serviceName: service.serviceName, category: service.category || "Digital", description: service.description || "" }); setIsServiceModalOpen(true); }}
+                                                className="p-1.5 text-slate-400 hover:text-slate-900 hover:bg-slate-50 rounded-md"
+                                            >
+                                                <Edit3 className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                aria-label={`Remove ${service.serviceName}`}
+                                                onClick={() => setServiceToDelete(service.id)}
+                                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <h4 className="font-bold text-slate-900 tracking-tight text-xl leading-snug">
+                                            {service.serviceName}
+                                        </h4>
+                                        <p className="text-xs text-slate-600 font-medium leading-relaxed line-clamp-2">
+                                            {service.description || "Add a short description so teammates understand when to use this service."}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -1327,3 +1490,4 @@ export default function ClientManager() {
         </div>
     );
 }
+

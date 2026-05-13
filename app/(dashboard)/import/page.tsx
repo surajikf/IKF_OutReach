@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from "next-auth/react";
 import { useState, useEffect, useRef } from "react";
-import { DownloadCloud, FileText, Database, Loader2, RefreshCw, CheckCircle2, Cloud, X, Key, Shield, Mail, User, Plus } from "lucide-react";
+import { DownloadCloud, FileText, Database, Loader2, RefreshCw, CheckCircle2, Cloud, X, Key, Shield, Mail, User, Plus, EyeOff } from "lucide-react";
 import { cn } from "@/lib/shared/utils";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -10,7 +10,6 @@ import { SmartLoader } from "@/components/layout/SmartLoader";
 import { safeImportRequest, type ImportSyncStatus } from "@/lib/import-sync";
 import { apiPath, appPath } from "@/lib/app-path";
 
-type GmailConnectIntent = "send" | "sync" | "both";
 type GmailSyncFolder = "INBOX" | "SENT" | "LABEL";
 type GmailHeader = "from" | "to" | "cc" | "bcc";
 type GmailSyncProfile = {
@@ -60,11 +59,12 @@ export default function ImportIntegrationsPage() {
     const [googleContactsAccountId, setGoogleContactsAccountId] = useState<string | null>(null);
     const [isGmailModalOpen, setIsGmailModalOpen] = useState(false);
     const [gmailLabel, setGmailLabel] = useState("Sales Team");
-    const [gmailIntent, setGmailIntent] = useState<GmailConnectIntent>("both");
     const [gmailSyncProfile, setGmailSyncProfile] = useState<GmailSyncProfile>(DEFAULT_GMAIL_SYNC_PROFILE);
     const [gmailSyncInsights, setGmailSyncInsights] = useState<Record<string, GmailSyncInsight>>({});
     const [isGmailProfileModalOpen, setIsGmailProfileModalOpen] = useState(false);
     const [activeGmailAccountForProfile, setActiveGmailAccountForProfile] = useState<{ id: string; email: string; name: string } | null>(null);
+    const [scopeNarrowedModal, setScopeNarrowedModal] = useState<{ open: boolean; removedFolders: string[]; onDecide: (mode: GmailCleanupMode) => void } | null>(null);
+    const [deleteGmailModal, setDeleteGmailModal] = useState<{ id: string; name: string } | null>(null);
 
     // Zoho Config State
     const [isZohoModalOpen, setIsZohoModalOpen] = useState(false);
@@ -156,7 +156,7 @@ export default function ImportIntegrationsPage() {
     const sanitizeSyncProfile = (raw: any): GmailSyncProfile | null => {
         if (!raw || typeof raw !== "object") return null;
         const sourceFolders = Array.isArray(raw.sourceFolders)
-            ? raw.sourceFolders.filter((v: any) => v === "INBOX" || v === "SENT" || v === "LABEL")
+            ? raw.sourceFolders.filter((v: any) => v === "INBOX" || v === "SENT")
             : ["INBOX", "SENT"];
         const extractHeaders = Array.isArray(raw.extractHeaders)
             ? raw.extractHeaders.filter((v: any) => v === "from" || v === "to" || v === "cc" || v === "bcc")
@@ -253,11 +253,14 @@ export default function ImportIntegrationsPage() {
     };
 
     const profileSummary = (profile: GmailSyncProfile) => {
-        const folders = profile.sourceFolders.join(" + ");
+        const activeFolders = profile.sourceFolders.filter(f => f !== "LABEL");
+        const folderLabel = activeFolders.includes("INBOX") && activeFolders.includes("SENT")
+            ? "INBOX + SENT"
+            : activeFolders.includes("INBOX") ? "INBOX" : activeFolders.includes("SENT") ? "SENT" : "INBOX + SENT";
         const headers = profile.extractHeaders.map((h) => h.toUpperCase()).join(", ");
         const domains = parseCsvText(profile.excludedDomainsText).length;
         const keywords = parseCsvText(profile.excludedKeywordsText).length;
-        return `${folders} | ${headers} | blocks: ${domains} domains, ${keywords} keywords`;
+        return `${folderLabel} | ${headers} | blocks: ${domains} domains, ${keywords} keywords`;
     };
 
     const fetchGlobalSettings = async () => {
@@ -516,21 +519,29 @@ export default function ImportIntegrationsPage() {
         }
         const accountKey = activeGmailAccountForProfile.email.toLowerCase();
         const previousProfile = getEffectiveProfileForAccount(accountKey);
-        let cleanupMode: GmailCleanupMode = "none";
+
         if (isProfileNarrowed(previousProfile, gmailSyncProfile)) {
-            const shouldApplySafeCleanup = window.confirm(
-                "Your sync scope is tighter than before. Existing contacts remain by default.\n\n" +
-                "Click OK to apply Safe Cleanup (mark out-of-scope contacts as blocked where detectable).\n" +
-                "Click Cancel to keep all existing contacts unchanged."
-            );
-            cleanupMode = shouldApplySafeCleanup ? "safe_cleanup" : "none";
-            saveCleanupModeForAccount(accountKey, cleanupMode);
+            const prevFolders = previousProfile.sourceFolders.filter(f => f !== "LABEL");
+            const nextFolders = gmailSyncProfile.sourceFolders.filter(f => f !== "LABEL");
+            const removedFolders = prevFolders.filter(f => !nextFolders.includes(f));
+
+            setScopeNarrowedModal({
+                open: true,
+                removedFolders,
+                onDecide: (mode) => {
+                    saveCleanupModeForAccount(accountKey, mode);
+                    saveProfileForAccount(accountKey, gmailSyncProfile);
+                    toast.success(`Sync filters saved for ${activeGmailAccountForProfile.name}.`);
+                    setIsGmailProfileModalOpen(false);
+                    setScopeNarrowedModal(null);
+                },
+            });
         } else {
             clearCleanupModeForAccount(accountKey);
+            saveProfileForAccount(accountKey, gmailSyncProfile);
+            toast.success(`Sync filters saved for ${activeGmailAccountForProfile.name}.`);
+            setIsGmailProfileModalOpen(false);
         }
-        saveProfileForAccount(accountKey, gmailSyncProfile);
-        toast.success(`Saved sync filters for ${activeGmailAccountForProfile.name}.`);
-        setIsGmailProfileModalOpen(false);
     };
 
     const handleAddGmailAccount = () => {
@@ -539,12 +550,8 @@ export default function ImportIntegrationsPage() {
             toast.error("Please enter an account label.");
             return;
         }
-        if ((gmailIntent === "sync" || gmailIntent === "both") && gmailSyncProfile.sourceFolders.length === 0) {
-            toast.error("Please select at least one sync source.");
-            return;
-        }
         const syncProfile = buildSyncOptionsPayload(gmailSyncProfile);
-        const url = `${appPath("/api/gmail/connect")}?label=${encodeURIComponent(label)}&intent=${encodeURIComponent(gmailIntent)}&returnTo=${encodeURIComponent("/import")}&syncProfile=${encodeURIComponent(JSON.stringify(syncProfile))}`;
+        const url = `${appPath("/api/gmail/connect")}?label=${encodeURIComponent(label)}&intent=both&returnTo=${encodeURIComponent("/import")}&syncProfile=${encodeURIComponent(JSON.stringify(syncProfile))}`;
         window.location.href = url;
     };
 
@@ -937,25 +944,34 @@ export default function ImportIntegrationsPage() {
                                         </div>
                                             );
                                         })()}
-                                        <div className="flex flex-col items-center gap-1">
+                                        <div className="flex items-center gap-2 shrink-0">
                                             <button
                                                 onClick={() => openProfileModal(acc)}
-                                                className="text-[9px] font-medium text-slate-500 hover:text-blue-600"
+                                                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] font-semibold text-slate-600 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-all"
                                             >
                                                 Edit Filters
                                             </button>
-                                            <button 
+                                            <button
                                                 onClick={() => handleGmailSync(acc.id, acc.accountName || acc.email, acc.email)}
                                                 disabled={syncStatus.gmail[acc.id] === "syncing"}
-                                                className="flex flex-col items-center gap-1 group/btn"
+                                                className={cn(
+                                                    "px-3 py-1.5 rounded-lg border text-[10px] font-semibold transition-all flex items-center gap-1.5",
+                                                    syncStatus.gmail[acc.id] === "syncing"
+                                                        ? "border-blue-200 bg-blue-50 text-blue-600 cursor-not-allowed"
+                                                        : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50"
+                                                )}
                                             >
-                                                <div className={cn(
-                                                    "w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-xl transition-all",
-                                                    syncStatus.gmail[acc.id] === "syncing" ? "border-blue-200 text-blue-600" : "hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-slate-400 shadow-sm"
-                                                )}>
-                                                    {syncStatus.gmail[acc.id] === "syncing" ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4 group-hover/btn:rotate-180 transition-transform duration-500" />}
-                                                </div>
-                                                <span className="text-[9px] font-medium text-slate-400 group-hover/btn:text-red-500">Sync Again</span>
+                                                {syncStatus.gmail[acc.id] === "syncing"
+                                                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                                                    : <RefreshCw className="w-3 h-3" />}
+                                                {syncStatus.gmail[acc.id] === "syncing" ? "Syncing..." : "Sync Again"}
+                                            </button>
+                                            <button
+                                                onClick={() => setDeleteGmailModal({ id: acc.id, name: acc.accountName || acc.email })}
+                                                className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-400 hover:border-red-300 hover:text-red-500 hover:bg-red-50 transition-all"
+                                                title="Remove account"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
                                             </button>
                                         </div>
                                     </div>
@@ -1065,25 +1081,40 @@ export default function ImportIntegrationsPage() {
 
             {/* Zoho Modal Refactor */}
             {isZohoModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto">
                     <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-all" onClick={() => setIsZohoModalOpen(false)} />
-                    <div className="bg-white w-full max-w-lg rounded-3xl border border-slate-200 shadow-xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-                        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
-                            <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                                    <Cloud className="w-4 h-4 text-orange-600" />
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="zoho-settings-title"
+                        className="bg-white w-full max-w-5xl rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[calc(100vh-1rem)] sm:max-h-[90vh]"
+                    >
+                        <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex items-start justify-between bg-white shrink-0 gap-3">
+                            <div className="flex items-start gap-2.5 min-w-0">
+                                <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center shrink-0">
+                                    <Cloud className="w-4 h-4 text-orange-600" aria-hidden="true" />
                                 </div>
-                                <h3 className="font-semibold text-slate-900 text-base">Zoho Settings</h3>
+                                <div className="min-w-0">
+                                    <h3 id="zoho-settings-title" className="font-semibold text-slate-900 text-lg leading-tight">Zoho Settings</h3>
+                                    <p className="text-xs text-slate-500 mt-1">Set up connection, choose stages, and control what gets synced.</p>
+                                </div>
                             </div>
-                            <button onClick={() => setIsZohoModalOpen(false)} className="text-slate-400 hover:text-slate-900 bg-slate-50 rounded-full p-1.5 transition-colors"><X className="w-4 h-4" /></button>
+                            <button
+                                type="button"
+                                aria-label="Close Zoho settings dialog"
+                                onClick={() => setIsZohoModalOpen(false)}
+                                className="text-slate-400 hover:text-slate-900 bg-slate-50 rounded-full p-1.5 transition-colors shrink-0"
+                            >
+                                <X className="w-4 h-4" aria-hidden="true" />
+                            </button>
                         </div>
 
-                        <div className="p-5 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
+                        <div className="px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto overscroll-contain space-y-5 flex-1 custom-scrollbar">
                             {/* Section 1: Authorization */}
                             <div className="space-y-3">
                                 <div className="flex items-center gap-2 mb-1">
                                     <Shield className="w-3.5 h-3.5 text-slate-400" />
-                                    <h4 className="text-sm font-semibold text-slate-700">1. Connection</h4>
+                                    <h4 className="text-sm font-semibold text-slate-700">1. Connect Account</h4>
                                 </div>
                                 <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100 flex flex-col gap-3">
                                     <div className="space-y-1">
@@ -1098,7 +1129,7 @@ export default function ImportIntegrationsPage() {
                                     </div>
                                     <button
                                         onClick={handleZohoAuth}
-                                        className="w-full h-10 bg-orange-600 text-white rounded-xl text-sm font-semibold hover:bg-orange-700 transition-all active:scale-[0.98] shadow-md shadow-orange-600/10 flex items-center justify-center gap-2"
+                                        className="w-full h-11 bg-orange-600 text-white rounded-xl text-sm font-semibold hover:bg-orange-700 transition-all active:scale-[0.98] shadow-md shadow-orange-600/10 flex items-center justify-center gap-2"
                                     >
                                         <Cloud className="w-3.5 h-3.5" />
                                         {zohoConfig.hasRefreshToken ? "Re-Authorize Zoho" : "Connect Zoho"}
@@ -1110,15 +1141,19 @@ export default function ImportIntegrationsPage() {
                             <div className="space-y-4">
                                 <div className="flex items-center gap-2 mb-1">
                                     <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-                                    <h4 className="text-sm font-semibold text-slate-700">2. Pipeline and stages</h4>
+                                    <h4 className="text-sm font-semibold text-slate-700">2. Choose Pipeline &amp; Stages</h4>
                                 </div>
                                 <div className="space-y-3">
+                                    <label htmlFor="zoho-pipeline-name" className="text-xs font-semibold text-slate-700 block">Pipeline name</label>
                                     <input
+                                        id="zoho-pipeline-name"
+                                        name="zoho_pipeline_name"
+                                        autoComplete="off"
                                         type="text"
                                         value={zohoFormData.pipelineName}
                                         onChange={(e) => setZohoFormData(prev => ({ ...prev, pipelineName: e.target.value }))}
-                                        placeholder="Pipeline Name (e.g. Sales Pipeline)"
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 outline-none focus:bg-white focus:border-orange-500 transition-all"
+                                        placeholder="Ex: Sales Pipeline"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 outline-none focus:bg-white focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-100 transition-all"
                                     />
                                     
                                     <div className="space-y-2">
@@ -1127,14 +1162,14 @@ export default function ImportIntegrationsPage() {
                                             <button 
                                                 onClick={refreshAvailableStages}
                                                 disabled={isLoadingStages}
-                                                className="text-xs font-semibold text-orange-600 hover:text-orange-700 disabled:opacity-50 flex items-center gap-1"
+                                                className="text-xs font-semibold text-orange-600 hover:text-orange-700 disabled:opacity-50 flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-orange-50"
                                             >
                                                 <RefreshCw className={`w-3 h-3 ${isLoadingStages ? 'animate-spin' : ''}`} />
                                                 Refresh
                                             </button>
                                         </div>
 
-                                        <div className="grid grid-cols-1 gap-1.5 max-h-[180px] overflow-y-auto p-3 bg-slate-50 rounded-xl border border-slate-200 custom-scrollbar">
+                                        <div className="grid grid-cols-1 gap-1.5 max-h-[32vh] min-h-[140px] overflow-y-auto p-3 bg-slate-50 rounded-xl border border-slate-200 custom-scrollbar">
                                             {isLoadingStages ? (
                                                 <div className="py-8 flex flex-col items-center justify-center gap-2">
                                                     <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
@@ -1185,9 +1220,9 @@ export default function ImportIntegrationsPage() {
                                 <button
                                     type="button"
                                     onClick={() => setShowZohoAdvanced((prev) => !prev)}
-                                    className="w-full flex items-center justify-between text-left"
+                                    className="w-full flex items-center justify-between text-left rounded-lg px-1 py-1 focus-visible:ring-2 focus-visible:ring-orange-100"
                                 >
-                                    <span className="text-sm font-semibold text-slate-700">Advanced settings</span>
+                                    <span className="text-sm font-semibold text-slate-700">Advanced Settings</span>
                                     <span className="text-xs font-medium text-slate-500">
                                         {showZohoAdvanced ? "Hide" : "Show"}
                                     </span>
@@ -1206,12 +1241,12 @@ export default function ImportIntegrationsPage() {
                                         <Database className="w-3.5 h-3.5 text-slate-400" />
                                         <h4 className="text-sm font-semibold text-slate-700">3. Column mapping</h4>
                                     </div>
-                                    <button 
-                                        onClick={() => setFieldMapping([...fieldMapping, { zohoField: "", appField: "metadata" }])}
-                                        className="text-xs font-semibold text-orange-600 hover:text-orange-700 flex items-center gap-1"
-                                    >
-                                        <Plus className="w-3 h-3" /> Add mapping
-                                    </button>
+                                            <button 
+                                                onClick={() => setFieldMapping([...fieldMapping, { zohoField: "", appField: "metadata" }])}
+                                                className="text-xs font-semibold text-orange-600 hover:text-orange-700 flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-orange-50"
+                                            >
+                                                <Plus className="w-3 h-3" /> Add mapping
+                                            </button>
                                 </div>
 
                                 <div className="space-y-2 max-h-[150px] overflow-y-auto pr-1 custom-scrollbar">
@@ -1296,10 +1331,10 @@ export default function ImportIntegrationsPage() {
                                         </div>
                                         <input 
                                             type="text" 
-                                            placeholder="Quick filter..."
+                                            placeholder="Filter fields…"
                                             value={zohoFieldSearch}
                                             onChange={(e) => setZohoFieldSearch(e.target.value)}
-                                            className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs w-32 outline-none focus:border-orange-500 transition-all"
+                                            className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs w-32 outline-none focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-100 transition-all"
                                         />
                                     </div>
 
@@ -1368,7 +1403,7 @@ export default function ImportIntegrationsPage() {
                                     className="w-full h-10 bg-white border border-slate-200 hover:border-orange-300 hover:bg-orange-50 text-slate-700 hover:text-orange-700 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2"
                                 >
                                     <Key className="w-3.5 h-3.5" />
-                                    {zohoConfig.hasRefreshToken ? "Refresh token" : "Link account identity"}
+                                    {zohoConfig.hasRefreshToken ? "Reconnect Zoho" : "Connect Zoho account"}
                                 </button>
                             )}
                         </div>
@@ -1378,102 +1413,81 @@ export default function ImportIntegrationsPage() {
 
             {/* Gmail Connection Modal */}
             {isGmailModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4">
                     <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsGmailModalOpen(false)} />
-                    <div className="bg-white w-full max-w-xl rounded-3xl border border-slate-200 shadow-xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <Mail className="w-5 h-5 text-red-600" />
-                                <h3 className="font-bold text-slate-900">Connect Gmail</h3>
-                            </div>
-                            <button onClick={() => setIsGmailModalOpen(false)} className="text-slate-400 hover:text-slate-900 bg-slate-50 rounded-full p-1.5 transition-colors"><X className="w-4 h-4" /></button>
-                        </div>
-                        <div className="p-6 space-y-5">
-                            <div>
-                                <label className="text-[10px] font-medium text-slate-400 block mb-2">Account Label</label>
-                                <input 
-                                    type="text" 
-                                    value={gmailLabel} 
-                                    onChange={(e) => setGmailLabel(e.target.value)}
-                                    placeholder="e.g. Sales Team, Support"
-                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 outline-none focus:bg-white focus:border-red-500 transition-all font-medium"
-                                />
-                                <p className="mt-2 text-[10px] text-slate-400 font-medium">Use this to identify this Gmail account later.</p>
-                            </div>
-
-                            <div>
-                                <label className="text-[10px] font-medium text-slate-400 block mb-2">What do you want to do?</label>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                    {[
-                                        { id: "send", title: "Send Emails", detail: "Send emails from this Gmail account only." },
-                                        { id: "sync", title: "Sync Contacts", detail: "Read Gmail and sync contact emails only." },
-                                        { id: "both", title: "Do Both", detail: "Enable both sending and contact sync." },
-                                    ].map((item) => (
-                                        <button
-                                            key={item.id}
-                                            type="button"
-                                            onClick={() => setGmailIntent(item.id as GmailConnectIntent)}
-                                            className={cn(
-                                                "text-left p-3 rounded-xl border transition-all",
-                                                gmailIntent === item.id
-                                                    ? "border-red-300 bg-red-50"
-                                                    : "border-slate-200 bg-white hover:border-red-200"
-                                            )}
-                                        >
-                                            <p className="text-[11px] font-bold text-slate-900">{item.title}</p>
-                                            <p className="text-[10px] text-slate-500 mt-1">{item.detail}</p>
-                                        </button>
-                                    ))}
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="gmail-connect-title"
+                        className="bg-white w-full max-w-4xl max-h-[92vh] sm:max-h-[90vh] rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col"
+                    >
+                        <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex items-start justify-between gap-4">
+                            <div className="flex items-start gap-2.5 min-w-0">
+                                <Mail className="w-5 h-5 text-red-600 mt-0.5 shrink-0" aria-hidden="true" />
+                                <div className="min-w-0">
+                                    <h3 id="gmail-connect-title" className="font-bold text-slate-900 text-lg leading-tight">Connect Gmail</h3>
+                                    <p className="text-xs text-slate-500 mt-1">Choose what to sync now. You can edit these filters later.</p>
                                 </div>
                             </div>
+                            <button
+                                type="button"
+                                aria-label="Close Gmail connect dialog"
+                                onClick={() => setIsGmailModalOpen(false)}
+                                className="text-slate-400 hover:text-slate-900 bg-slate-50 rounded-full p-1.5 transition-colors shrink-0"
+                            >
+                                <X className="w-4 h-4" aria-hidden="true" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 sm:py-5 space-y-4">
+                            <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+                                <label htmlFor="gmail-label-input" className="text-xs font-semibold text-slate-700 block mb-2">Account Label</label>
+                                <input
+                                    id="gmail-label-input"
+                                    name="gmail_label"
+                                    autoComplete="off"
+                                    type="text"
+                                    value={gmailLabel}
+                                    onChange={(e) => setGmailLabel(e.target.value)}
+                                    placeholder="Ex: Sales Team, Support"
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 outline-none focus:bg-white focus:border-red-500 focus-visible:ring-2 focus-visible:ring-red-100 transition-all font-medium"
+                                />
+                                <p className="mt-2 text-xs text-slate-500">This name helps you identify the connected mailbox later.</p>
+                            </div>
 
-                            {(gmailIntent === "sync" || gmailIntent === "both") && (
-                                <div className="space-y-4 border border-slate-100 rounded-2xl p-4 bg-slate-50/50">
-                                    <p className="text-[11px] font-bold text-slate-800">Contact Sync Options</p>
+                            <div className="space-y-4 border border-slate-100 rounded-2xl p-4 sm:p-5 bg-slate-50/50">
+                                    <p className="text-sm font-bold text-slate-800">Contact Sync Options</p>
 
                                     <div>
-                                        <label className="text-[10px] font-medium text-slate-500 block mb-2">Source folders</label>
-                                        <div className="flex flex-wrap gap-2">
-                                            {(["INBOX", "SENT", "LABEL"] as GmailSyncFolder[]).map((folder) => (
-                                                <button
-                                                    key={folder}
-                                                    type="button"
-                                                    onClick={() =>
-                                                        setGmailSyncProfile((prev) => ({
-                                                            ...prev,
-                                                            sourceFolders: prev.sourceFolders.includes(folder)
-                                                                ? prev.sourceFolders.filter((f) => f !== folder)
-                                                                : [...prev.sourceFolders, folder],
-                                                        }))
-                                                    }
-                                                    className={cn(
-                                                        "px-3 py-1.5 rounded-lg text-[10px] font-medium border",
-                                                        gmailSyncProfile.sourceFolders.includes(folder)
-                                                            ? "bg-blue-50 text-blue-700 border-blue-200"
-                                                            : "bg-white text-slate-500 border-slate-200"
-                                                    )}
-                                                >
-                                                    {folder}
-                                                </button>
-                                            ))}
+                                        <p className="text-xs font-semibold text-slate-700 mb-2">1. Sync from</p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                            {([
+                                                { id: "inbox", label: "Inbox", folders: ["INBOX"] as GmailSyncFolder[], desc: "Sync emails received" },
+                                                { id: "sent", label: "Sent", folders: ["SENT"] as GmailSyncFolder[], desc: "Sync emails you sent" },
+                                                { id: "both", label: "Both", folders: ["INBOX", "SENT"] as GmailSyncFolder[], desc: "Sync inbox & sent" },
+                                            ]).map((opt) => {
+                                                const isActive = opt.folders.length === gmailSyncProfile.sourceFolders.filter(f => f !== "LABEL").length &&
+                                                    opt.folders.every(f => gmailSyncProfile.sourceFolders.includes(f));
+                                                return (
+                                                    <button
+                                                        key={opt.id}
+                                                        type="button"
+                                                        onClick={() => setGmailSyncProfile((prev) => ({ ...prev, sourceFolders: opt.folders }))}
+                                                        className={cn(
+                                                            "text-left p-3 rounded-xl border transition-all focus-visible:ring-2 focus-visible:ring-blue-100",
+                                                            isActive ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-white hover:border-blue-200"
+                                                        )}
+                                                    >
+                                                        <p className="text-sm font-semibold text-slate-900">{opt.label}</p>
+                                                        <p className="text-xs text-slate-500 mt-0.5">{opt.desc}</p>
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
+                                        <p className="mt-2 text-xs text-slate-500">Spam &amp; junk are excluded automatically.</p>
                                     </div>
 
-                                    {gmailSyncProfile.sourceFolders.includes("LABEL") && (
-                                        <div>
-                                            <label className="text-[10px] font-medium text-slate-500 block mb-2">Custom labels (comma separated)</label>
-                                            <input
-                                                type="text"
-                                                value={gmailSyncProfile.customLabelsText}
-                                                onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, customLabelsText: e.target.value }))}
-                                                placeholder="leads, clients, high-priority"
-                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500"
-                                            />
-                                        </div>
-                                    )}
-
                                     <div>
-                                        <label className="text-[10px] font-medium text-slate-500 block mb-2">Extract from</label>
+                                        <p className="text-xs font-semibold text-slate-700 mb-2">2. Extract from</p>
                                         <div className="flex flex-wrap gap-2">
                                             {(["from", "to", "cc", "bcc"] as GmailHeader[]).map((header) => (
                                                 <button
@@ -1488,7 +1502,7 @@ export default function ImportIntegrationsPage() {
                                                         }))
                                                     }
                                                     className={cn(
-                                                        "px-3 py-1.5 rounded-lg text-[10px] font-medium border uppercase",
+                                                        "px-3 py-1.5 rounded-lg text-xs font-semibold border uppercase focus-visible:ring-2 focus-visible:ring-blue-100",
                                                         gmailSyncProfile.extractHeaders.includes(header)
                                                             ? "bg-blue-50 text-blue-700 border-blue-200"
                                                             : "bg-white text-slate-500 border-slate-200"
@@ -1500,53 +1514,62 @@ export default function ImportIntegrationsPage() {
                                         </div>
                                     </div>
 
-                                    <div className="grid sm:grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         <div>
-                                            <label className="text-[10px] font-medium text-slate-500 block mb-2">Block domains</label>
+                                            <label htmlFor="gmail-block-domains" className="text-xs font-semibold text-slate-700 block mb-2">Block domains</label>
                                             <input
+                                                id="gmail-block-domains"
+                                                name="gmail_block_domains"
+                                                autoComplete="off"
                                                 type="text"
                                                 value={gmailSyncProfile.excludedDomainsText}
                                                 onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, excludedDomainsText: e.target.value }))}
-                                                placeholder="e.g. noreply.com, spam.com"
-                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500"
+                                                placeholder="Ex: noreply.com, spam.com"
+                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-100"
                                             />
-                                            <p className="mt-1 text-[10px] text-slate-500">Skips contacts whose email domain matches these entries.</p>
+                                            <p className="mt-1 text-xs text-slate-500">Skip contacts when the email domain matches.</p>
                                         </div>
                                         <div>
-                                            <label className="text-[10px] font-medium text-slate-500 block mb-2">Block keywords</label>
+                                            <label htmlFor="gmail-block-keywords" className="text-xs font-semibold text-slate-700 block mb-2">Block keywords</label>
                                             <input
+                                                id="gmail-block-keywords"
+                                                name="gmail_block_keywords"
+                                                autoComplete="off"
                                                 type="text"
                                                 value={gmailSyncProfile.excludedKeywordsText}
                                                 onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, excludedKeywordsText: e.target.value }))}
-                                                placeholder="e.g. unsubscribe, alert, invoice"
-                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500"
+                                                placeholder="Ex: unsubscribe, alert, invoice"
+                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-100"
                                             />
-                                            <p className="mt-1 text-[10px] text-slate-500">Skips contacts when keywords appear in sender details, subject, or snippet.</p>
+                                            <p className="mt-1 text-xs text-slate-500">Skip contacts when these words appear in sender, subject, or snippet.</p>
                                         </div>
                                     </div>
 
-                                    <label className="flex items-center gap-2 text-[11px] text-slate-700 font-medium">
+                                    <label className="flex items-center gap-2 text-sm text-slate-700 font-medium cursor-pointer">
                                         <input
                                             type="checkbox"
                                             checked={gmailSyncProfile.persistBlockList}
                                             onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, persistBlockList: e.target.checked }))}
+                                            className="rounded border-slate-300"
                                         />
                                         Keep blocked domains active after future syncs
                                     </label>
-                                    <label className="flex items-center gap-2 text-[11px] text-slate-700 font-medium">
+                                    <label className="flex items-center gap-2 text-sm text-slate-700 font-medium cursor-pointer">
                                         <input
                                             type="checkbox"
                                             checked={gmailSyncProfile.includeAutomatedEmails}
                                             onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, includeAutomatedEmails: e.target.checked }))}
+                                            className="rounded border-slate-300"
                                         />
                                         Include newsletter/alert/transaction emails in normal sync
                                     </label>
                                 </div>
-                            )}
+                        </div>
 
+                        <div className="border-t border-slate-100 px-4 sm:px-6 py-4 space-y-3 bg-white">
                             <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
                                 <p className="text-[10px] text-blue-700 font-medium">
-                                    Permissions are requested based on your selection to reduce unnecessary access.
+                                    Both send &amp; read permissions will be requested to enable outreach and contact sync.
                                 </p>
                             </div>
                             <button 
@@ -1561,56 +1584,53 @@ export default function ImportIntegrationsPage() {
                 </div>
             )}
             {isGmailProfileModalOpen && activeGmailAccountForProfile && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4">
                     <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsGmailProfileModalOpen(false)} />
-                    <div className="bg-white w-full max-w-xl rounded-3xl border border-slate-200 shadow-xl relative overflow-hidden">
-                        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                    <div className="bg-white w-full max-w-4xl max-h-[92vh] sm:max-h-[90vh] rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xl relative overflow-hidden flex flex-col">
+                        <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between">
                             <h3 className="font-bold text-slate-900">Edit Sync Filters</h3>
-                            <button onClick={() => setIsGmailProfileModalOpen(false)} className="text-slate-400 hover:text-slate-900 bg-slate-50 rounded-full p-1.5 transition-colors"><X className="w-4 h-4" /></button>
+                            <button
+                                type="button"
+                                aria-label="Close sync filters dialog"
+                                onClick={() => setIsGmailProfileModalOpen(false)}
+                                className="text-slate-400 hover:text-slate-900 bg-slate-50 rounded-full p-1.5 transition-colors"
+                            >
+                                <X className="w-4 h-4" aria-hidden="true" />
+                            </button>
                         </div>
-                        <div className="p-6 space-y-4">
+                        <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 sm:py-5 space-y-4">
                             <p className="text-[11px] text-slate-600 font-medium">{activeGmailAccountForProfile.name} ({activeGmailAccountForProfile.email})</p>
-                            <div className="space-y-3 border border-slate-100 rounded-2xl p-4 bg-slate-50/50">
+                            <div className="space-y-3 border border-slate-100 rounded-2xl p-4 sm:p-5 bg-slate-50/50">
                                 <div>
-                                    <label className="text-[10px] font-medium text-slate-500 block mb-2">Source folders</label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {(["INBOX", "SENT", "LABEL"] as GmailSyncFolder[]).map((folder) => (
-                                            <button
-                                                key={folder}
+                                    <label className="text-xs font-semibold text-slate-700 block mb-2">Sync from</label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        {([
+                                            { id: "inbox", label: "Inbox", folders: ["INBOX"] as GmailSyncFolder[], desc: "Received emails" },
+                                            { id: "sent", label: "Sent", folders: ["SENT"] as GmailSyncFolder[], desc: "Sent emails" },
+                                            { id: "both", label: "Both", folders: ["INBOX", "SENT"] as GmailSyncFolder[], desc: "Inbox & sent" },
+                                        ]).map((opt) => {
+                                            const isActive = opt.folders.length === gmailSyncProfile.sourceFolders.filter(f => f !== "LABEL").length &&
+                                                opt.folders.every(f => gmailSyncProfile.sourceFolders.includes(f));
+                                            return (
+                                                <button
+                                                    key={opt.id}
                                                 type="button"
-                                                onClick={() =>
-                                                    setGmailSyncProfile((prev) => ({
-                                                        ...prev,
-                                                        sourceFolders: prev.sourceFolders.includes(folder)
-                                                            ? prev.sourceFolders.filter((f) => f !== folder)
-                                                            : [...prev.sourceFolders, folder],
-                                                    }))
-                                                }
+                                                onClick={() => setGmailSyncProfile((prev) => ({ ...prev, sourceFolders: opt.folders }))}
                                                 className={cn(
-                                                    "px-3 py-1.5 rounded-lg text-[10px] font-medium border",
-                                                    gmailSyncProfile.sourceFolders.includes(folder)
-                                                        ? "bg-blue-50 text-blue-700 border-blue-200"
-                                                        : "bg-white text-slate-500 border-slate-200"
+                                                    "text-left p-3 rounded-xl border transition-all focus-visible:ring-2 focus-visible:ring-blue-100",
+                                                    isActive ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-white hover:border-blue-200"
                                                 )}
                                             >
-                                                {folder}
-                                            </button>
-                                        ))}
+                                                    <p className="text-[11px] font-bold text-slate-900">{opt.label}</p>
+                                                    <p className="text-[10px] text-slate-500 mt-0.5">{opt.desc}</p>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
+                                    <p className="mt-2 text-[10px] text-slate-400">Spam &amp; junk are always excluded automatically.</p>
                                 </div>
-                                {gmailSyncProfile.sourceFolders.includes("LABEL") && (
-                                    <div>
-                                        <label className="text-[10px] font-medium text-slate-500 block mb-2">Custom labels</label>
-                                        <input
-                                            type="text"
-                                            value={gmailSyncProfile.customLabelsText}
-                                            onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, customLabelsText: e.target.value }))}
-                                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500"
-                                        />
-                                    </div>
-                                )}
                                 <div>
-                                    <label className="text-[10px] font-medium text-slate-500 block mb-2">Extract from</label>
+                                    <label className="text-xs font-semibold text-slate-700 block mb-2">Extract from</label>
                                     <div className="flex flex-wrap gap-2">
                                         {(["from", "to", "cc", "bcc"] as GmailHeader[]).map((header) => (
                                             <button
@@ -1625,7 +1645,7 @@ export default function ImportIntegrationsPage() {
                                                     }))
                                                 }
                                                 className={cn(
-                                                    "px-3 py-1.5 rounded-lg text-[10px] font-medium border uppercase",
+                                                    "px-3 py-1.5 rounded-lg text-xs font-semibold border uppercase focus-visible:ring-2 focus-visible:ring-blue-100",
                                                     gmailSyncProfile.extractHeaders.includes(header)
                                                         ? "bg-blue-50 text-blue-700 border-blue-200"
                                                         : "bg-white text-slate-500 border-slate-200"
@@ -1636,47 +1656,166 @@ export default function ImportIntegrationsPage() {
                                         ))}
                                     </div>
                                 </div>
-                                <div className="grid sm:grid-cols-2 gap-3">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div>
-                                        <label className="text-[10px] font-medium text-slate-500 block mb-2">Block domains</label>
+                                        <label className="text-xs font-semibold text-slate-700 block mb-2">Block domains</label>
                                         <input
                                             type="text"
                                             value={gmailSyncProfile.excludedDomainsText}
                                             onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, excludedDomainsText: e.target.value }))}
-                                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500"
+                                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-100"
                                         />
                                         <p className="mt-1 text-[10px] text-slate-500">Skips contacts whose email domain matches these entries.</p>
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-medium text-slate-500 block mb-2">Block keywords</label>
+                                        <label className="text-xs font-semibold text-slate-700 block mb-2">Block keywords</label>
                                         <input
                                             type="text"
                                             value={gmailSyncProfile.excludedKeywordsText}
                                             onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, excludedKeywordsText: e.target.value }))}
-                                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500"
+                                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-100"
                                         />
                                         <p className="mt-1 text-[10px] text-slate-500">Skips contacts when keywords appear in sender details, subject, or snippet.</p>
                                     </div>
                                 </div>
-                                <label className="flex items-center gap-2 text-[11px] text-slate-700 font-medium">
+                                <label className="flex items-center gap-2 text-sm text-slate-700 font-medium cursor-pointer">
                                     <input
                                         type="checkbox"
                                         checked={gmailSyncProfile.persistBlockList}
                                         onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, persistBlockList: e.target.checked }))}
+                                        className="rounded border-slate-300"
                                     />
                                     Keep blocked domains active after future syncs
                                 </label>
-                                <label className="flex items-center gap-2 text-[11px] text-slate-700 font-medium">
+                                <label className="flex items-center gap-2 text-sm text-slate-700 font-medium cursor-pointer">
                                     <input
                                         type="checkbox"
                                         checked={gmailSyncProfile.includeAutomatedEmails}
                                         onChange={(e) => setGmailSyncProfile((prev) => ({ ...prev, includeAutomatedEmails: e.target.checked }))}
+                                        className="rounded border-slate-300"
                                     />
                                     Include newsletter/alert/transaction emails in normal sync
                                 </label>
                             </div>
-                            <button onClick={saveActiveProfile} className="w-full h-11 bg-slate-900 text-white rounded-2xl text-[11px] font-semibold">
+                            <button onClick={saveActiveProfile} className="w-full h-11 bg-slate-900 text-white rounded-2xl text-sm font-semibold hover:bg-slate-800 transition-colors">
                                 Save Filters
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Gmail Account Modal */}
+            {deleteGmailModal && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setDeleteGmailModal(null)} />
+                    <div className="bg-white w-full max-w-sm rounded-3xl border border-slate-200 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-6 space-y-5">
+                            <div className="flex items-start gap-4">
+                                <div className="w-10 h-10 rounded-full bg-red-50 border border-red-200 flex items-center justify-center shrink-0 mt-0.5">
+                                    <Mail className="w-5 h-5 text-red-500" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold text-slate-900">Remove Gmail Account?</h3>
+                                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                                        <span className="font-semibold text-slate-700">{deleteGmailModal.name}</span> will be disconnected. Previously synced contacts are not deleted.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setDeleteGmailModal(null)}
+                                    className="flex-1 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        const { id, name } = deleteGmailModal;
+                                        setDeleteGmailModal(null);
+                                        const res = await fetch(apiPath(`/settings/gmail?id=${id}`), { method: "DELETE" });
+                                        if ((await res.json()).success) {
+                                            toast.success(`"${name}" removed.`);
+                                            fetchGmailAccounts();
+                                        } else {
+                                            toast.error("Failed to remove account.");
+                                        }
+                                    }}
+                                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-all shadow-sm"
+                                >
+                                    Remove Account
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Scope Narrowed Confirmation Modal */}
+            {scopeNarrowedModal?.open && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" />
+                    <div className="bg-white w-full max-w-md rounded-3xl border border-slate-200 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-6 space-y-5">
+                            <div className="flex items-start gap-4">
+                                <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0 mt-0.5">
+                                    <Shield className="w-5 h-5 text-amber-500" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold text-slate-900">Sync Scope Narrowed</h3>
+                                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                                        You removed{" "}
+                                        <span className="font-semibold text-slate-700">
+                                            {scopeNarrowedModal.removedFolders.map(f => f.charAt(0) + f.slice(1).toLowerCase()).join(" & ")}
+                                        </span>{" "}
+                                        from the sync scope. What should happen to contacts that were synced from{" "}
+                                        {scopeNarrowedModal.removedFolders.length > 1 ? "those folders" : "that folder"}?
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <button
+                                    type="button"
+                                    onClick={() => scopeNarrowedModal.onDecide("none")}
+                                    className="w-full text-left p-4 rounded-2xl border border-slate-200 hover:border-slate-300 bg-white transition-all group"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0 group-hover:bg-slate-100 transition-all">
+                                            <Database className="w-4 h-4 text-slate-400" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-900">Keep all existing contacts</p>
+                                            <p className="text-[10px] text-slate-500 mt-0.5">Nothing changes. Previously synced contacts stay as-is.</p>
+                                        </div>
+                                    </div>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => scopeNarrowedModal.onDecide("safe_cleanup")}
+                                    className="w-full text-left p-4 rounded-2xl border border-amber-200 hover:border-amber-300 bg-amber-50/50 transition-all group"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0 group-hover:bg-amber-100 transition-all">
+                                            <EyeOff className="w-4 h-4 text-amber-500" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-900">Hide out-of-scope contacts</p>
+                                            <p className="text-[10px] text-slate-500 mt-0.5">Contacts from removed folders will be marked inactive on the next sync. Reversible.</p>
+                                        </div>
+                                    </div>
+                                </button>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => setScopeNarrowedModal(null)}
+                                className="w-full py-2.5 text-xs font-medium text-slate-400 hover:text-slate-600 transition-colors"
+                            >
+                                Cancel — go back to editing
                             </button>
                         </div>
                     </div>
