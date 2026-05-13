@@ -108,7 +108,7 @@ export async function GET(request: Request) {
             ? { OR: [{ userId: scopedUserId }, { source: "INVOICE_SYSTEM" }] }
             : { ...userScope, ...(canUseInvoice ? {} : { source: { not: "INVOICE_SYSTEM" } }) };
         const gmailStatsBaseWhere: any = { ...gmailUserScope };
-        const [sourceStatsRaw, gmailStatsRaw, gmailAccounts, googleContactsStatsRaw] = await Promise.all([
+        const [sourceStatsRaw, gmailStatsRaw, gmailAccounts, googleContactsStatsRaw, roleBasedStatsRaw] = await Promise.all([
             prisma.client.groupBy({
                 by: ['source', 'relationshipLevel'],
                 _count: { _all: true },
@@ -131,6 +131,11 @@ export async function GET(request: Request) {
                     source: 'GMAIL',
                     metadata: { path: ["importChannels"], array_contains: "google_contacts" },
                 },
+            }),
+            prisma.client.groupBy({
+                by: ['source', 'isRoleBased'],
+                _count: { _all: true },
+                where: statsBaseWhere,
             }),
         ]);
 
@@ -182,6 +187,35 @@ export async function GET(request: Request) {
                 return acc;
             }, { total: 0, active: 0, inactive: 0 });
         }
+
+        // Attach generic/roleBased counts to each source stat entry
+        const roleBasedMap: Record<string, { generic: number; roleBased: number }> = {};
+        const addToRoleMap = (map: Record<string, { generic: number; roleBased: number }>, key: string, r: any) => {
+            if (!map[key]) map[key] = { generic: 0, roleBased: 0 };
+            if (r.isRoleBased === true) map[key].roleBased += r._count._all;
+            else map[key].generic += r._count._all; // false AND null both treated as generic
+        };
+        roleBasedStatsRaw.forEach((r: any) => addToRoleMap(roleBasedMap, r.source, r));
+        // For GMAIL use user-scoped counts
+        const gmailRoleRaw = await prisma.client.groupBy({
+            by: ['isRoleBased'],
+            _count: { _all: true },
+            where: { ...gmailUserScope, source: 'GMAIL' },
+        });
+        roleBasedMap['GMAIL'] = { generic: 0, roleBased: 0 };
+        gmailRoleRaw.forEach((r: any) => addToRoleMap(roleBasedMap, 'GMAIL', r));
+        // For GOOGLE_CONTACTS use user-scoped + importChannels filter
+        const gcRoleRaw = await prisma.client.groupBy({
+            by: ['isRoleBased'],
+            _count: { _all: true },
+            where: { ...gmailUserScope, source: 'GMAIL', metadata: { path: ["importChannels"], array_contains: "google_contacts" } },
+        });
+        roleBasedMap['GOOGLE_CONTACTS'] = { generic: 0, roleBased: 0 };
+        gcRoleRaw.forEach((r: any) => addToRoleMap(roleBasedMap, 'GOOGLE_CONTACTS', r));
+        Object.keys(sourceStats).forEach(s => {
+            const rb = roleBasedMap[s];
+            if (rb) { sourceStats[s].generic = rb.generic; sourceStats[s].roleBased = rb.roleBased; }
+        });
 
         // Add Zoho specifics (Tags breakdown for the mini-dashboard tooltips)
         if (sourceStats['ZOHO_BIGIN']) {

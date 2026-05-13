@@ -87,6 +87,8 @@ export async function GET(request: Request) {
         let invoiceCount = 0;
         let lastInvoice: { updatedAt: Date } | null = null;
         let gmailCount = 0;
+        let gmailGenericCount = 0;
+        let gmailRoleBasedCount = 0;
         let lastGmail: { updatedAt: Date } | null = null;
         let googleContactsCount = 0;
         let googleContactsLastSyncAt: Date | null = null;
@@ -97,6 +99,18 @@ export async function GET(request: Request) {
                 select: { lastUsed: true },
             });
             googleContactsLastSyncAt = contactsAccount?.lastUsed ?? null;
+
+            const gmailRoleRaw = await prisma.client.groupBy({
+                by: ['isRoleBased'],
+                _count: { _all: true },
+                where: { ...userScope, source: "GMAIL" },
+            });
+            gmailRoleRaw.forEach((r: any) => {
+                if (r.isRoleBased === true) gmailRoleBasedCount += r._count._all;
+                else if (r.isRoleBased === false) gmailGenericCount += r._count._all;
+                // null isRoleBased rows treated as generic
+                else gmailGenericCount += r._count._all;
+            });
 
             [gmailAccounts, invoiceCount, lastInvoice, gmailCount, lastGmail, googleContactsCount] = await Promise.all([
                 prisma.gmailAccount.findMany({
@@ -154,6 +168,8 @@ export async function GET(request: Request) {
             },
             gmailStats: {
                 count: gmailCount,
+                generic: gmailGenericCount,
+                roleBased: gmailRoleBasedCount,
                 lastSyncAt: lastGmail?.updatedAt || null
             },
             googleContactsStats: {

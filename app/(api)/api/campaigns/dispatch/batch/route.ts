@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { ok, error } from "@/services/api-response";
 import { getBackendSession, isApprovedUser } from "@/services/auth";
+import { runCampaignDispatchInline } from "@/services/workers/campaign-dispatch";
 import { z } from "zod";
 
 const dispatchBatchSchema = z.object({
@@ -51,13 +52,39 @@ export async function POST(request: Request) {
     const job = await (prisma as any).job.create({
       data: {
         type: "CAMPAIGN_DISPATCH_BATCH",
-        status: "QUEUED",
+        status: "RUNNING",
         progress: 0,
         payload: { ...parsed.data, userId: scopedUserId },
       },
     });
 
-    return ok({ jobId: job.id }, { status: 202 });
+    // Run synchronously so the job status is updated before we respond.
+    // This avoids the serverless-termination problem where fire-and-forget
+    // IIFEs are killed after the response is sent, leaving jobs stuck in RUNNING.
+    try {
+      const result = await runCampaignDispatchInline({
+        campaignIds: parsed.data.campaignIds,
+        dispatchMode: parsed.data.dispatchMode,
+        userId: scopedUserId,
+        batchSize: parsed.data.batchSize,
+        batchDelayMinutes: parsed.data.batchDelayMinutes,
+        scheduledAt: parsed.data.scheduledAt ?? null,
+        jobId: job.id,
+      });
+      const succeeded = result.successCount > 0 || result.total === 0;
+      await (prisma as any).job.update({
+        where: { id: job.id },
+        data: { status: succeeded ? "SUCCEEDED" : "FAILED", progress: 100, result },
+      });
+      return ok({ jobId: job.id, result }, { status: 200 });
+    } catch (err: any) {
+      console.error("[dispatch-batch] Inline execution error:", err);
+      await (prisma as any).job.update({
+        where: { id: job.id },
+        data: { status: "FAILED", result: { error: err?.message || "Unknown error" } },
+      }).catch(() => {});
+      return error("INTERNAL_ERROR", err?.message || "Dispatch failed.", { status: 500 });
+    }
   } catch (err: any) {
     console.error("Dispatch batch enqueue error:", err);
     return error("INTERNAL_ERROR", "Failed to enqueue dispatch batch.");

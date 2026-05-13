@@ -97,16 +97,39 @@ export async function runGoogleContactsSync(accountId: string) {
   });
   const existingMap = new Map(existing.map((c) => [String(c.email).toLowerCase(), c.source]));
 
+  // Strip any stale "google_contacts" tags from this user's Gmail records that are NOT
+  // in the current Google Contacts list. This ensures the tab only shows real GC contacts.
+  const contactEmails = new Set(entries.map((c) => c.email));
+  const staleTagged = await prisma.client.findMany({
+    where: {
+      userId: account.userId,
+      source: "GMAIL",
+      metadata: { path: ["importChannels"], array_contains: "google_contacts" as any },
+    },
+    select: { id: true, email: true, metadata: true },
+  });
+  for (const stale of staleTagged) {
+    if (stale.email && contactEmails.has(stale.email.toLowerCase())) continue;
+    const staleMeta = stale.metadata && typeof stale.metadata === "object" ? (stale.metadata as any) : {};
+    const cleaned = Array.isArray(staleMeta.importChannels)
+      ? staleMeta.importChannels.filter((ch: string) => ch !== "google_contacts")
+      : [];
+    await prisma.client.update({
+      where: { id: stale.id },
+      data: { metadata: { ...staleMeta, importChannels: cleaned } },
+    }).catch(() => null);
+  }
+
   let conflicts = 0;
   let synced = 0;
   for (const c of entries) {
-    const existingSource = existingMap.get(c.email);
-    if (existingSource && existingSource !== "GMAIL") conflicts += 1;
     const resolvedName = c.name || deriveNameFromEmail(c.email) || "Anonymous Contact";
-    // Only read metadata for records owned by this user
+    const externalId = `${account.id}:google_contacts:${c.email}`;
+
+    // Only read/tag records owned by this user — never touch other users' records.
     const prev = await prisma.client.findFirst({
       where: { email: c.email, userId: account.userId },
-      select: { metadata: true },
+      select: { id: true, metadata: true },
     });
     const prevMeta = prev?.metadata && typeof prev.metadata === "object" ? (prev.metadata as any) : {};
     const channels = Array.isArray(prevMeta.importChannels) ? prevMeta.importChannels : [];
@@ -114,12 +137,7 @@ export async function runGoogleContactsSync(accountId: string) {
 
     try {
       await prisma.client.upsert({
-        where: {
-          source_externalId: {
-            source: "GMAIL",
-            externalId: `${account.id}:google_contacts:${c.email}`,
-          },
-        },
+        where: { source_externalId: { source: "GMAIL", externalId } },
         update: {
           clientName: resolvedName,
           contactPerson: resolvedName,
@@ -133,7 +151,7 @@ export async function runGoogleContactsSync(accountId: string) {
           industry: "Corporate",
           relationshipLevel: "Warm Lead",
           source: "GMAIL",
-          externalId: `${account.id}:google_contacts:${c.email}`,
+          externalId,
           gmailSourceAccount: account.email,
           userId: account.userId,
           metadata: { importChannels: ["google_contacts"] },
@@ -142,19 +160,29 @@ export async function runGoogleContactsSync(accountId: string) {
       synced += 1;
     } catch (e: any) {
       if (e?.code === "P2002") {
-        // Email already exists under a different externalId (e.g. synced from Gmail inbox/sent).
-        // The upsert's CREATE leg failed the email unique constraint. We still need to tag that
-        // existing record with "google_contacts" in importChannels so the count and filter work.
-        const updated = await prisma.client.updateMany({
-          where: { email: c.email, userId: account.userId },
-          data: { metadata: meta },
-        }).catch(() => null);
-        if (updated && updated.count > 0) {
-          synced += 1;
+        // Email exists for this user under a different externalId (e.g. from Gmail inbox sync).
+        // Tag that existing record with "google_contacts" so filters work correctly.
+        if (prev) {
+          const tagResult = await prisma.client.update({
+            where: { id: prev.id },
+            data: { metadata: meta },
+          }).catch((tagErr: any) => {
+            console.error(`[google-contacts-sync] Failed to tag existing record id=${prev.id} email=${c.email}:`, tagErr?.message || tagErr);
+            return null;
+          });
+          if (tagResult) {
+            synced += 1;
+          } else {
+            console.error(`[google-contacts-sync] Could not tag existing record for email=${c.email}, counting as conflict.`);
+            conflicts += 1;
+          }
         } else {
+          // Email exists but belongs to a different user — true conflict, skip.
+          console.error(`[google-contacts-sync] Email ${c.email} exists under a different userId — skipping.`);
           conflicts += 1;
         }
       } else {
+        console.error(`[google-contacts-sync] Unexpected error for email=${c.email}:`, e?.message || e);
         throw e;
       }
     }

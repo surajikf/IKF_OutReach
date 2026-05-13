@@ -22,6 +22,7 @@ type CampaignRecord = {
 type ConfirmDialog =
     | { type: "send"; record: CampaignRecord }
     | { type: "delete"; record: CampaignRecord }
+    | { type: "bulk-delete"; count: number }
     | null;
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
@@ -38,11 +39,11 @@ function ConfirmModal({ dialog, onConfirm, onCancel }: {
     onCancel: () => void;
 }) {
     if (!dialog) return null;
-    const r = dialog.record;
-    const clientName = r.client?.clientName || "this client";
-    const email = r.client?.email || "";
 
     if (dialog.type === "send") {
+        const r = dialog.record;
+        const clientName = r.client?.clientName || "this client";
+        const email = r.client?.email || "";
         return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
                 <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md mx-4 p-6 space-y-4">
@@ -84,6 +85,38 @@ function ConfirmModal({ dialog, onConfirm, onCancel }: {
         );
     }
 
+    if (dialog.type === "bulk-delete") {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-sm mx-4 p-6 space-y-4">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center">
+                            <Trash2 className="w-5 h-5 text-rose-600" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-bold text-slate-900">Delete selected campaigns?</p>
+                            <p className="text-xs text-slate-500 mt-0.5">This cannot be undone.</p>
+                        </div>
+                    </div>
+                    <p className="text-sm text-slate-600 bg-slate-50 rounded-xl px-4 py-3">
+                        <span className="font-semibold text-slate-800">{dialog.count}</span> campaign{dialog.count === 1 ? "" : "s"} will be permanently removed.
+                    </p>
+                    <div className="flex gap-3">
+                        <button onClick={onCancel} className="flex-1 h-10 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
+                            Cancel
+                        </button>
+                        <button onClick={onConfirm} className="flex-1 h-10 rounded-xl bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 transition-colors flex items-center justify-center gap-2">
+                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    const r = dialog.record;
+    const clientName = r.client?.clientName || "this client";
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-sm mx-4 p-6 space-y-4">
@@ -121,6 +154,7 @@ export default function CampaignListPage() {
     const [busyMode, setBusyMode] = useState<"SEND" | "DRAFT" | "DELETE" | null>(null);
     const [statusFilter, setStatusFilter] = useState<"ALL" | DispatchStatus>("ALL");
     const [confirm, setConfirm] = useState<ConfirmDialog>(null);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
     const load = async () => {
         setLoading(true);
@@ -198,10 +232,63 @@ export default function CampaignListPage() {
         }
     };
 
+    const runBulkDelete = async () => {
+        if (selectedIds.length === 0) return;
+        setBusyMode("DELETE");
+        try {
+            const ids = [...selectedIds];
+            const results = await Promise.all(
+                ids.map(async (campaignId) => {
+                    const res = await fetch(apiPath(`/campaigns/${encodeURIComponent(campaignId)}`), { method: "DELETE" });
+                    if (!res.ok) {
+                        const json = await res.json().catch(() => ({}));
+                        throw new Error(json?.error || "Failed to delete selected campaigns.");
+                    }
+                    return campaignId;
+                })
+            );
+            setRecords((prev) => prev.filter((r) => !results.includes(r.id)));
+            setSelectedIds([]);
+            toast.success(`${results.length} campaign${results.length === 1 ? "" : "s"} deleted.`);
+        } catch (error: any) {
+            toast.error(error?.message || "Failed to delete selected campaigns.");
+        } finally {
+            setBusyId(null);
+            setBusyMode(null);
+        }
+    };
+
     const rows = useMemo(() =>
         statusFilter === "ALL" ? records : records.filter((r) => r.dispatchStatus === statusFilter),
         [records, statusFilter]
     );
+
+    useEffect(() => {
+        const rowIds = new Set(rows.map((r) => r.id));
+        setSelectedIds((prev) => prev.filter((id) => rowIds.has(id)));
+    }, [rows]);
+
+    const selectableRows = useMemo(
+        () => rows.filter((r) => (r.dispatchStatus || "GENERATED") !== "PROCESSING"),
+        [rows]
+    );
+
+    const allSelectableSelected = selectableRows.length > 0 && selectableRows.every((r) => selectedIds.includes(r.id));
+    const someSelectableSelected = selectedIds.length > 0 && !allSelectableSelected;
+
+    const toggleSelected = (campaignId: string) => {
+        setSelectedIds((prev) =>
+            prev.includes(campaignId) ? prev.filter((id) => id !== campaignId) : [...prev, campaignId]
+        );
+    };
+
+    const toggleSelectAllVisible = () => {
+        if (allSelectableSelected) {
+            setSelectedIds([]);
+            return;
+        }
+        setSelectedIds(selectableRows.map((r) => r.id));
+    };
 
     // --- Per-row action logic ---
     const getActions = (r: CampaignRecord) => {
@@ -288,6 +375,11 @@ export default function CampaignListPage() {
                 onCancel={() => setConfirm(null)}
                 onConfirm={() => {
                     if (!confirm) return;
+                    if (confirm.type === "bulk-delete") {
+                        setConfirm(null);
+                        runBulkDelete();
+                        return;
+                    }
                     const r = confirm.record;
                     setConfirm(null);
                     if (confirm.type === "send") runDispatch(r.id, "SEND");
@@ -337,10 +429,53 @@ export default function CampaignListPage() {
                     ))}
                 </div>
 
+                {selectedIds.length > 0 && (
+                    <div className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex items-center gap-3 text-sm flex-wrap">
+                            <span className="font-semibold text-slate-900">{selectedIds.length} selected</span>
+                            <button
+                                type="button"
+                                onClick={toggleSelectAllVisible}
+                                className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+                            >
+                                {allSelectableSelected ? "Unselect all shown" : "Select all shown"}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedIds([])}
+                                className="text-xs font-semibold text-slate-500 hover:text-slate-800"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setConfirm({ type: "bulk-delete", count: selectedIds.length })}
+                            disabled={busyMode === "DELETE"}
+                            className="h-10 px-4 rounded-xl bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                            {busyMode === "DELETE" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                            Delete Selected
+                        </button>
+                    </div>
+                )}
+
                 {/* Desktop table */}
                 <div className="hidden lg:block bg-white border border-slate-200 rounded-xl overflow-hidden">
                     <div className="grid grid-cols-12 gap-3 px-5 py-3 text-xs font-medium text-slate-400 border-b border-slate-100 bg-slate-50">
-                        <div className="col-span-4">Client / Subject</div>
+                        <div className="col-span-1 flex items-center">
+                            <input
+                                type="checkbox"
+                                checked={allSelectableSelected}
+                                ref={(node) => {
+                                    if (node) node.indeterminate = someSelectableSelected;
+                                }}
+                                onChange={toggleSelectAllVisible}
+                                aria-label="Select all visible campaigns"
+                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            />
+                        </div>
+                        <div className="col-span-3">Client / Subject</div>
                         <div className="col-span-2">Type</div>
                         <div className="col-span-2">Status</div>
                         <div className="col-span-2">Updated</div>
@@ -355,7 +490,17 @@ export default function CampaignListPage() {
                         <div className="p-8 text-sm text-slate-500">No campaigns found.</div>
                     ) : rows.map((r) => (
                         <div key={r.id} className="grid grid-cols-12 gap-3 px-5 py-3.5 border-b border-slate-100 last:border-0 items-center hover:bg-slate-50/50 transition-colors">
-                            <div className="col-span-4 min-w-0">
+                            <div className="col-span-1 flex items-center">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedIds.includes(r.id)}
+                                    onChange={() => toggleSelected(r.id)}
+                                    disabled={(r.dispatchStatus || "GENERATED") === "PROCESSING"}
+                                    aria-label={`Select campaign for ${r.client?.clientName || "Unknown Client"}`}
+                                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-40"
+                                />
+                            </div>
+                            <div className="col-span-3 min-w-0">
                                 <div className="text-sm font-semibold text-slate-900 truncate">{r.client?.clientName || "Unknown Client"}</div>
                                 <div className="text-xs text-slate-400 truncate mt-0.5">{r.campaignTopic || "Untitled"}</div>
                             </div>
@@ -382,6 +527,25 @@ export default function CampaignListPage() {
 
                 {/* Mobile cards */}
                 <div className="lg:hidden space-y-3">
+                    {rows.length > 0 && (
+                        <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-3">
+                            <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+                                <input
+                                    type="checkbox"
+                                    checked={allSelectableSelected}
+                                    ref={(node) => {
+                                        if (node) node.indeterminate = someSelectableSelected;
+                                    }}
+                                    onChange={toggleSelectAllVisible}
+                                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                Select all shown
+                            </label>
+                            {selectedIds.length > 0 && (
+                                <span className="text-xs font-semibold text-slate-500">{selectedIds.length} selected</span>
+                            )}
+                        </div>
+                    )}
                     {loading ? (
                         <div className="bg-white border border-slate-200 rounded-xl p-4 text-sm text-slate-500 flex items-center gap-2">
                             <RefreshCw className="w-4 h-4 animate-spin" /> Loading…
@@ -390,9 +554,19 @@ export default function CampaignListPage() {
                         <div className="bg-white border border-slate-200 rounded-xl p-4 text-sm text-slate-500">No campaigns found.</div>
                     ) : rows.map((r) => (
                         <div key={r.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
-                            <div>
-                                <div className="text-sm font-semibold text-slate-900">{r.client?.clientName || "Unknown Client"}</div>
-                                <div className="text-xs text-slate-400 mt-0.5">{r.campaignTopic || "Untitled"}</div>
+                            <div className="flex items-start gap-3">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedIds.includes(r.id)}
+                                    onChange={() => toggleSelected(r.id)}
+                                    disabled={(r.dispatchStatus || "GENERATED") === "PROCESSING"}
+                                    aria-label={`Select campaign for ${r.client?.clientName || "Unknown Client"}`}
+                                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-40"
+                                />
+                                <div>
+                                    <div className="text-sm font-semibold text-slate-900">{r.client?.clientName || "Unknown Client"}</div>
+                                    <div className="text-xs text-slate-400 mt-0.5">{r.campaignTopic || "Untitled"}</div>
+                                </div>
                             </div>
                             <div className="flex items-center gap-2 flex-wrap">
                                 <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">{r.campaignType}</span>

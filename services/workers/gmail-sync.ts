@@ -5,6 +5,8 @@ import { isRoleBasedEmail } from "../email-utils";
 type GmailSyncFolder = "INBOX" | "SENT" | "LABEL";
 type GmailHeader = "from" | "to" | "cc" | "bcc";
 
+type GmailSyncDuration = "7d" | "30d" | "90d" | "6m" | "1y" | "all";
+
 type GmailSyncOptions = {
   sourceFolders?: GmailSyncFolder[];
   customLabels?: string[];
@@ -13,6 +15,7 @@ type GmailSyncOptions = {
   excludedKeywords?: string[];
   persistBlockList?: boolean;
   includeAutomatedEmails?: boolean;
+  syncDuration?: GmailSyncDuration;
 };
 type GmailCleanupMode = "none" | "safe_cleanup";
 
@@ -57,6 +60,29 @@ function normalizeSyncOptions(options?: GmailSyncOptions) {
   const excludedDomains = new Set((options?.excludedDomains || []).map((d) => d.trim().toLowerCase()).filter(Boolean));
   const excludedKeywords = (options?.excludedKeywords || []).map((k) => k.trim().toLowerCase()).filter(Boolean);
 
+  const syncDuration: GmailSyncDuration = (options?.syncDuration as GmailSyncDuration) || "30d";
+
+  // Compute after: date and max results based on chosen duration.
+  // maxResults is capped at 500 per Gmail API page; we paginate for larger ranges.
+  // maxResults caps how many message IDs we fetch before stopping pagination.
+  // Unique contacts plateau well before the message count — no need to fetch thousands.
+  // Gmail API metadata calls are the bottleneck; lower counts = faster syncs.
+  const durationConfig: Record<GmailSyncDuration, { days: number | null; maxResults: number }> = {
+    "7d":  { days: 7,    maxResults: 100 },
+    "30d": { days: 30,   maxResults: 200 },
+    "90d": { days: 90,   maxResults: 300 },
+    "6m":  { days: 180,  maxResults: 400 },
+    "1y":  { days: 365,  maxResults: 500 },
+    "all": { days: null, maxResults: 500 },
+  };
+  const { days, maxResults } = durationConfig[syncDuration];
+  let afterDate: string | null = null;
+  if (days !== null) {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    afterDate = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+  }
+
   return {
     sourceFolders: sanitizedSourceFolders.length > 0 ? sanitizedSourceFolders : ["INBOX", "SENT"],
     customLabels,
@@ -65,6 +91,9 @@ function normalizeSyncOptions(options?: GmailSyncOptions) {
     excludedKeywords,
     persistBlockList: options?.persistBlockList === true,
     includeAutomatedEmails: options?.includeAutomatedEmails === true,
+    syncDuration,
+    afterDate,
+    maxResults,
   };
 }
 
@@ -244,21 +273,37 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
   const folderQuery = allFolderClauses.length > 1
     ? `{${allFolderClauses.join(" ")}}`
     : allFolderClauses[0] || "in:inbox";
-  const gmailQuery = `after:2024/01/01 ${folderQuery} -in:spam -in:trash`;
+  const afterClause = syncOptions.afterDate ? `after:${syncOptions.afterDate}` : "";
+  const gmailQuery = [afterClause, folderQuery, "-in:spam -in:trash"].filter(Boolean).join(" ");
+  const pageMaxResults = Math.min(syncOptions.maxResults, 500); // Gmail API hard cap per page
 
-  const messagesRes = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=40&q=${encodeURIComponent(gmailQuery)}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
+  // Paginate to collect all messages up to syncOptions.maxResults total.
+  const messages: any[] = [];
+  let pageToken: string | undefined;
+  let pagesFetched = 0;
+  const MAX_PAGES = 20; // hard safety cap — prevents infinite loop on malformed API responses
+  do {
+    const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages");
+    url.searchParams.set("maxResults", String(pageMaxResults));
+    url.searchParams.set("q", gmailQuery);
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
 
-  if (!messagesRes.ok) {
-    const errBody = await messagesRes.json().catch(() => ({}));
-    const errMsg = errBody?.error?.message || errBody?.error || messagesRes.statusText || "unknown";
-    throw new Error(`Gmail API error (${messagesRes.status}): ${errMsg}`);
-  }
+    const messagesRes = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!messagesRes.ok) {
+      const errBody = await messagesRes.json().catch(() => ({}));
+      const errMsg = errBody?.error?.message || errBody?.error || messagesRes.statusText || "unknown";
+      throw new Error(`Gmail API error (${messagesRes.status}): ${errMsg}`);
+    }
+    const page = await messagesRes.json();
+    const pageMsgs = Array.isArray(page.messages) ? page.messages : [];
+    messages.push(...pageMsgs);
+    pageToken = page.nextPageToken;
+    pagesFetched++;
+    // Stop once limit reached or no new messages returned (avoids infinite loop on empty pages)
+    if (messages.length >= syncOptions.maxResults || pageMsgs.length === 0) break;
+  } while (pageToken && pagesFetched < MAX_PAGES);
 
-  const { messages = [] } = await messagesRes.json();
-  console.log(`[GMAIL_SYNC] Found ${messages.length} messages.`);
+  console.log(`[GMAIL_SYNC] Found ${messages.length} messages (duration: ${syncOptions.syncDuration}, query: "${gmailQuery}").`);
 
   // 3) Extract headers (From/To)
   const contacts = new Map<string, { email: string; name: string }>();
@@ -288,7 +333,7 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
   const metadataParams = metadataHeaderNames
     .map((h) => `metadataHeaders=${encodeURIComponent(h.charAt(0).toUpperCase() + h.slice(1))}`)
     .join("&");
-  const detailItems = await mapLimit(messages, 5, async (msg: any) => {
+  const detailItems = await mapLimit(messages, 20, async (msg: any) => {
     const detailRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&${metadataParams}`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
@@ -418,12 +463,19 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
     const resolvedContactPerson = resolvedName || null;
 
     try {
-      const prev = await prisma.client.findUnique({ where: { email }, select: { metadata: true } });
+      // Only read metadata from this user's own record — never cross-contaminate with other users.
+      const prev = await prisma.client.findFirst({
+        where: { email, userId: account.userId, source: "GMAIL" },
+        select: { metadata: true },
+      });
       const prevMeta = prev?.metadata && typeof prev.metadata === "object" ? (prev.metadata as any) : {};
       const prevChannels = Array.isArray(prevMeta.importChannels) ? prevMeta.importChannels : [];
+      // Only carry forward Gmail-related channels — never bleed "google_contacts" into Gmail sync.
+      const gmailChannels = ["gmail_inbox", "gmail_sent", "gmail_label"];
+      const filteredPrevChannels = prevChannels.filter((ch: string) => gmailChannels.includes(ch));
       const metadata = {
         ...prevMeta,
-        importChannels: Array.from(new Set([...prevChannels, ...importChannels])),
+        importChannels: Array.from(new Set([...filteredPrevChannels, ...importChannels])),
       };
       await prisma.client.upsert({
         where: {
@@ -454,19 +506,21 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
         },
       });
     } catch (err) {
-       console.error(`[GMAIL_SYNC] Upsert failed for ${email}:`, err);
+      console.error(`[GMAIL_SYNC] Upsert failed for ${email}:`, err);
     }
 
-    return { isConflict };
+    return { isConflict, isRoleBased: roleBased };
   });
 
   const importedCount = upsertResults.length;
   const conflictCount = upsertResults.filter((r) => r.isConflict).length;
+  const roleBasedCount = upsertResults.filter((r) => r.isRoleBased).length;
   const skippedAutomatedTotal = Object.values(skippedAutomated).reduce((acc, curr) => acc + curr, 0);
 
-  console.log(`[GMAIL_SYNC] Sync complete. Imported: ${importedCount}, Conflicts: ${conflictCount}, SkippedAutomated: ${skippedAutomatedTotal}`);
+  console.log(`[GMAIL_SYNC] Sync complete. Imported: ${importedCount} (${importedCount - roleBasedCount} generic, ${roleBasedCount} role-based), Conflicts: ${conflictCount}, SkippedAutomated: ${skippedAutomatedTotal}`);
   return {
     count: importedCount,
+    roleBasedCount,
     conflicts: conflictCount,
     skippedAutomatedTotal,
     skippedAutomatedByCategory: skippedAutomated,

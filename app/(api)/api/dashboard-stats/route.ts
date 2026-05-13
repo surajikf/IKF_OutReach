@@ -1,13 +1,23 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getBackendSession } from "@/services/auth";
+import { getBackendSession, hasInvoiceAccess } from "@/services/auth";
 
 export async function GET(request: Request) {
     try {
         const session = await getBackendSession(request);
         const userId = session?.user?.id;
         const isAdmin = session?.user?.role === "ADMIN";
-        const scopedWhere = isAdmin ? {} : { userId: userId ?? "__none__" };
+        const canUseInvoice = await hasInvoiceAccess(request);
+
+        // Match the same scoping logic used in listClients:
+        // - Admin: see everything
+        // - User with invoice access: see their own records OR any invoice record
+        // - Regular user: see only their own records
+        const scopedWhere = isAdmin
+            ? {}
+            : canUseInvoice && userId
+            ? { OR: [{ userId }, { source: "INVOICE_SYSTEM" as const }] }
+            : { userId: userId ?? "__none__" };
 
         const [totalClients, integrationConfig] = await Promise.all([
             prisma.client.count({ where: scopedWhere }),

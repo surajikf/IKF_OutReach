@@ -395,8 +395,9 @@ const ClientRow = memo(({ contact, index, page, pageSize, onEdit, onDelete, onTo
 ClientRow.displayName = "ClientRow";
 
 export default function ClientManager() {
-    const [view, setView] = useState<"clients" | "services" | "rolebased">("clients");
+    const [view, setView] = useState<"clients" | "services">("clients");
     const [activeSourceTab, setActiveSourceTab] = useState<"ALL" | "INVOICE" | "ZOHO" | "GMAIL" | "GOOGLE_CONTACTS">("ALL");
+    const [contactTypeTab, setContactTypeTab] = useState<"generic" | "rolebased">("generic");
     const [clients, setClients] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
@@ -447,7 +448,7 @@ export default function ClientManager() {
             console.log("🔄 Filter update trigger");
             fetchClients();
         }
-    }, [filterIndustry, filterLevel, filterService, filterSource, view, page, pageSize, search]);
+    }, [filterIndustry, filterLevel, filterService, filterSource, view, page, pageSize, search, contactTypeTab]);
 
     const fetchServices = async () => {
         try {
@@ -472,7 +473,7 @@ export default function ClientManager() {
             filterLevel.forEach(v => query.append("level", v));
             filterService.forEach(v => query.append("service", v));
             filterSource.forEach(v => query.append("source", v));
-            if (view === "rolebased") query.append("roleBased", "true");
+            query.append("roleBased", contactTypeTab === "rolebased" ? "true" : "false");
             if (search) query.append("search", search);
             query.append("page", String(page));
             query.append("pageSize", String(pageSize));
@@ -672,6 +673,7 @@ export default function ClientManager() {
 
     const handleSourceTab = (tab: "ALL" | "INVOICE" | "ZOHO" | "GMAIL" | "GOOGLE_CONTACTS") => {
         setActiveSourceTab(tab);
+        setContactTypeTab("generic");
         setPage(1);
         if (tab === "ALL") setFilterSource([]);
         else if (tab === "INVOICE") setFilterSource(["INVOICE_SYSTEM"]);
@@ -893,9 +895,9 @@ export default function ClientManager() {
             <div className="flex items-center justify-between gap-4 px-2 py-1">
                 <div className="flex items-center gap-4">
                     <h2 className="text-lg font-semibold text-slate-900 shrink-0">
-                        {view === "clients" ? "Portfolio" : view === "services" ? "Capabilities" : "Role-Based Contacts"}
+                        {view === "clients" ? "Portfolio" : "Capabilities"}
                     </h2>
-                    {(view === "clients" || view === "rolebased") && (
+                    {view === "clients" && (
                         <>
                             <div className="w-px h-5 bg-slate-200" />
                             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
@@ -909,7 +911,18 @@ export default function ClientManager() {
                                 GOOGLE_CONTACTS: "text-[#34A853]",
                             };
                             const sourceKey = tab === "INVOICE" ? "INVOICE_SYSTEM" : tab === "ZOHO" ? "ZOHO_BIGIN" : tab;
-                            const count = tab === "ALL" ? Object.values(sourceStats).reduce((a: any, b: any) => a + (b?.total || 0), 0) : (sourceStats[sourceKey]?.total ?? null);
+                            const statEntry = sourceStats[sourceKey];
+                            const count = tab === "ALL" ? Object.values(sourceStats).reduce((a: any, b: any) => a + (b?.total || 0), 0) : (statEntry?.total ?? null);
+                            const genericCount = tab === "ALL" ? Object.values(sourceStats).reduce((a: any, b: any) => a + (b?.generic || 0), 0) : (statEntry?.generic ?? null);
+                            const roleBasedCount = tab === "ALL" ? Object.values(sourceStats).reduce((a: any, b: any) => a + (b?.roleBased || 0), 0) : (statEntry?.roleBased ?? null);
+                            // Show breakdown only when role-based contacts exist — badge format: generic/roleBased
+                            const hasRoleBased = roleBasedCount !== null && roleBasedCount > 0;
+                            const showBreakdown = genericCount !== null && roleBasedCount !== null && (genericCount > 0 || roleBasedCount > 0);
+                            const badgeTooltip = showBreakdown
+                                ? hasRoleBased
+                                    ? `${genericCount} Generic contacts · ${roleBasedCount} Role-Based contacts\n${count} total`
+                                    : `${genericCount} contacts (all generic)`
+                                : undefined;
                             const isActive = activeSourceTab === tab;
                             const TabIcon = () => {
                                 if (tab === "ALL") return <Database className="w-3.5 h-3.5 shrink-0" />;
@@ -952,11 +965,14 @@ export default function ClientManager() {
                                     <TabIcon />
                                     {tabLabels[tab]}
                                     {count !== null && count > 0 && (
-                                        <span className={cn(
-                                            "text-[10px] font-bold px-1.5 py-0.5 rounded-full",
-                                            isActive ? "bg-slate-100" : "bg-slate-200 text-slate-500"
-                                        )}>
-                                            {count}
+                                        <span
+                                            title={badgeTooltip}
+                                            className={cn(
+                                                "text-[10px] font-bold px-1.5 py-0.5 rounded-full cursor-default",
+                                                isActive ? "bg-slate-100" : "bg-slate-200 text-slate-500"
+                                            )}
+                                        >
+                                            {showBreakdown ? `${genericCount}/${roleBasedCount}` : count}
                                         </span>
                                     )}
                                 </button>
@@ -968,9 +984,9 @@ export default function ClientManager() {
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="bg-slate-100 p-1 rounded-lg flex items-center gap-1">
-                        {(["clients", "services", "rolebased"] as const).map((v) => (
+                        {(["clients", "services"] as const).map((v) => (
                             <button key={v} onClick={() => setView(v)} className={cn("text-xs font-semibold px-3 py-1.5 rounded-md transition-all", view === v ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
-                                {v === "clients" ? "Clients" : v === "services" ? "Services" : "Role-Based"}
+                                {v === "clients" ? "Clients" : "Services"}
                             </button>
                         ))}
                     </div>
@@ -982,7 +998,7 @@ export default function ClientManager() {
                 </div>
             </div>
 
-            {view === "clients" || view === "rolebased" ? (
+            {view === "clients" ? (
                 <>
                     <div className="sticky top-3 z-40 flex flex-col gap-2.5 bg-white/80 backdrop-blur-xl p-4 rounded-2xl border border-slate-200/50 shadow-[0_4px_20px_rgb(0,0,0,0.04)] transition-all">
                     <div className="flex flex-wrap items-center gap-4">
@@ -1092,6 +1108,23 @@ export default function ClientManager() {
                                 </p>
                             </div>
                         )}
+                        {/* Generic / Role-Based contact type sub-tabs */}
+                        <div className="flex items-center gap-1 px-4 py-2 border-b border-slate-100 bg-white">
+                            {(["generic", "rolebased"] as const).map((t) => (
+                                <button
+                                    key={t}
+                                    onClick={() => { setContactTypeTab(t); setPage(1); }}
+                                    className={cn(
+                                        "text-[11px] font-semibold px-3 py-1.5 rounded-md transition-all",
+                                        contactTypeTab === t
+                                            ? "bg-slate-900 text-white"
+                                            : "text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                                    )}
+                                >
+                                    {t === "generic" ? "Generic Contacts" : "Role-Based Contacts"}
+                                </button>
+                            ))}
+                        </div>
                         <table className="w-full text-left border-collapse overflow-hidden min-w-[780px]">
                             <thead>
                                 <tr className="bg-slate-50/50 border-b border-slate-100 text-[10px] sm:text-[11px]">

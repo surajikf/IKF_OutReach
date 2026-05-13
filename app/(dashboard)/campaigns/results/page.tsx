@@ -529,6 +529,26 @@ function CampaignResultsContent() {
                 return;
             }
 
+            // API runs dispatch synchronously and returns the result directly.
+            // If the result is already present in the response, use it immediately.
+            const inlineResult = data?.data?.result as Record<string, any> | undefined;
+            if (inlineResult) {
+                const total = inlineResult.total ?? idsToDispatch.length;
+                const successCount = inlineResult.successCount ?? 0;
+                const actionWord = mode === "DRAFT" ? "drafts created" : "emails sent";
+                if (successCount === total) {
+                    toast.success(`${total} ${actionWord}.`);
+                } else {
+                    toast.warning(`${successCount}/${total} ${actionWord}. Please check errors.`);
+                }
+                setIsDispatching(false);
+                setDispatchProgress(100);
+                setSelectedIds(new Set());
+                await fetchLatestResults(jobCreatedAt, { preserveEditor: true });
+                return;
+            }
+
+            // Fallback: poll job status (for cases where inline result is missing)
             const poll = async () => {
                 try {
                 const jr = await fetch(apiPath(`/jobs/${encodeURIComponent(jobId)}`));
@@ -567,7 +587,6 @@ function CampaignResultsContent() {
                         setIsDispatching(false);
                         setDispatchProgress(100);
                         setSelectedIds(new Set());
-                        // Refresh history after dispatch completes (keep newly-generated filter if present)
                         await fetchLatestResults(jobCreatedAt);
                         return;
                     }

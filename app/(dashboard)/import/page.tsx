@@ -12,7 +12,10 @@ import { apiPath, appPath } from "@/lib/app-path";
 
 type GmailSyncFolder = "INBOX" | "SENT" | "LABEL";
 type GmailHeader = "from" | "to" | "cc" | "bcc";
+type GmailSyncDuration = "7d" | "30d" | "90d" | "6m" | "1y" | "all";
+
 type GmailSyncProfile = {
+    syncDuration: GmailSyncDuration;
     sourceFolders: GmailSyncFolder[];
     customLabelsText: string;
     extractHeaders: GmailHeader[];
@@ -29,7 +32,17 @@ type GmailSyncInsight = {
     skippedAutomatedSamples: Array<{ email: string; category: string }>;
 };
 
+const GMAIL_DURATION_OPTIONS: { value: GmailSyncDuration; label: string; desc: string }[] = [
+    { value: "7d",  label: "7 days",   desc: "Last week" },
+    { value: "30d", label: "30 days",  desc: "Last month" },
+    { value: "90d", label: "90 days",  desc: "Last 3 months" },
+    { value: "6m",  label: "6 months", desc: "Last 6 months" },
+    { value: "1y",  label: "1 year",   desc: "Last 12 months" },
+    { value: "all", label: "All time", desc: "Full mailbox history" },
+];
+
 const DEFAULT_GMAIL_SYNC_PROFILE: GmailSyncProfile = {
+    syncDuration: "30d",
     sourceFolders: ["INBOX", "SENT"],
     customLabelsText: "",
     extractHeaders: ["from", "to"],
@@ -61,6 +74,8 @@ export default function ImportIntegrationsPage() {
     const [gmailLabel, setGmailLabel] = useState("Sales Team");
     const [gmailSyncProfile, setGmailSyncProfile] = useState<GmailSyncProfile>(DEFAULT_GMAIL_SYNC_PROFILE);
     const [gmailSyncInsights, setGmailSyncInsights] = useState<Record<string, GmailSyncInsight>>({});
+    const [gmailNeedsReauth, setGmailNeedsReauth] = useState<Record<string, boolean>>({});
+    const [googleContactsStatus, setGoogleContactsStatus] = useState<ImportSyncStatus>("idle");
     const [isGmailProfileModalOpen, setIsGmailProfileModalOpen] = useState(false);
     const [activeGmailAccountForProfile, setActiveGmailAccountForProfile] = useState<{ id: string; email: string; name: string } | null>(null);
     const [scopeNarrowedModal, setScopeNarrowedModal] = useState<{ open: boolean; removedFolders: string[]; onDecide: (mode: GmailCleanupMode) => void } | null>(null);
@@ -143,6 +158,7 @@ export default function ImportIntegrationsPage() {
         const sourceFolders = profile.sourceFolders.length > 0 ? profile.sourceFolders : ["INBOX", "SENT"];
         const extractHeaders = profile.extractHeaders.length > 0 ? profile.extractHeaders : ["from", "to"];
         return {
+            syncDuration: profile.syncDuration || "30d",
             sourceFolders,
             customLabels: parseCsvText(profile.customLabelsText),
             extractHeaders,
@@ -162,7 +178,11 @@ export default function ImportIntegrationsPage() {
             ? raw.extractHeaders.filter((v: any) => v === "from" || v === "to" || v === "cc" || v === "bcc")
             : ["from", "to"];
 
+        const validDurations: GmailSyncDuration[] = ["7d", "30d", "90d", "6m", "1y", "all"];
+        const syncDuration: GmailSyncDuration = validDurations.includes(raw.syncDuration) ? raw.syncDuration : "30d";
+
         return {
+            syncDuration,
             sourceFolders: sourceFolders.length > 0 ? sourceFolders : ["INBOX", "SENT"],
             customLabelsText: Array.isArray(raw.customLabels) ? raw.customLabels.join(", ") : "",
             extractHeaders: extractHeaders.length > 0 ? extractHeaders : ["from", "to"],
@@ -260,7 +280,8 @@ export default function ImportIntegrationsPage() {
         const headers = profile.extractHeaders.map((h) => h.toUpperCase()).join(", ");
         const domains = parseCsvText(profile.excludedDomainsText).length;
         const keywords = parseCsvText(profile.excludedKeywordsText).length;
-        return `${folderLabel} | ${headers} | blocks: ${domains} domains, ${keywords} keywords`;
+        const durationLabel = GMAIL_DURATION_OPTIONS.find(d => d.value === profile.syncDuration)?.label ?? profile.syncDuration;
+        return `${durationLabel} | ${folderLabel} | ${headers} | blocks: ${domains} domains, ${keywords} keywords`;
     };
 
     const fetchGlobalSettings = async () => {
@@ -430,14 +451,22 @@ export default function ImportIntegrationsPage() {
             toast.info(`Syncing ${accountName} with: ${profileSummary(savedProfile || gmailSyncProfile)}`);
             const cleanupMode = accountEmail ? getCleanupModeForAccount(accountEmail.toLowerCase()) : "none";
 
-            // Run sync immediately inline — no job worker required
+            // Run sync immediately inline — no job worker required.
+            // Timeout scales with duration: longer history = more messages to fetch.
+            const durationTimeouts: Record<string, number> = {
+                "7d": 30000, "30d": 45000, "90d": 60000,
+                "6m": 75000, "1y": 90000, "all": 120000,
+            };
+            const syncTimeoutMs = durationTimeouts[syncOptions.syncDuration ?? "30d"] ?? 60000;
+
             const result = await safeImportRequest<{ count: number; conflicts: number; skippedAutomatedTotal?: number; skippedAutomatedByCategory?: Record<string, number>; skippedAutomatedSamples?: string[]; immediate?: boolean }>(
                 "/api/import/gmail?immediate=true",
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ accountId, options: syncOptions, cleanupMode }),
-                }
+                },
+                { timeoutMs: syncTimeoutMs, retryOnce: false },
             );
 
             if (accountEmail) {
@@ -445,7 +474,14 @@ export default function ImportIntegrationsPage() {
             }
 
             if (!result.ok) {
-                toast.error(result.message || `Failed to sync from ${accountName}`);
+                const msg = result.message || "";
+                const isScopeError = msg.includes("403") || msg.toLowerCase().includes("insufficient") || msg.toLowerCase().includes("scope");
+                if (isScopeError) {
+                    setGmailNeedsReauth((prev) => ({ ...prev, [accountId]: true }));
+                    toast.error("This account needs re-authentication — permissions have changed. Click Re-auth on the account card.");
+                } else {
+                    toast.error(msg || `Failed to sync from ${accountName}`);
+                }
                 setGmailStatus(accountId, "error");
                 return;
             }
@@ -456,8 +492,11 @@ export default function ImportIntegrationsPage() {
             const skippedAutomatedTotal = Number(data.skippedAutomatedTotal || 0);
             const skippedCategories = data.skippedAutomatedByCategory || {};
             const skippedSamples = Array.isArray(data.skippedAutomatedSamples) ? data.skippedAutomatedSamples : [];
+            const roleBasedSynced = Number(data.roleBasedCount || 0);
+            const genericSynced = count - roleBasedSynced;
+            const breakdownNote = ` (${genericSynced} generic · ${roleBasedSynced} role-based)`;
 
-            const message = `Successfully imported ${count} clients from ${accountName} Gmail.${conflicts > 0 ? ` Detected ${conflicts} existing record conflicts.` : ""}${skippedAutomatedTotal > 0 ? ` Skipped ${skippedAutomatedTotal} automated/system emails.` : ""}`;
+            const message = `Successfully imported ${count} clients from ${accountName} Gmail.${breakdownNote}${conflicts > 0 ? ` Detected ${conflicts} existing record conflicts.` : ""}${skippedAutomatedTotal > 0 ? ` Skipped ${skippedAutomatedTotal} automated/system emails.` : ""}`;
             toast.success(message);
             if (skippedAutomatedTotal > 0) {
                 const details = Object.entries(skippedCategories)
@@ -554,7 +593,7 @@ export default function ImportIntegrationsPage() {
         const lockKey = `gcontacts:${googleContactsAccountId}`;
         if (inFlightKeysRef.current.has(lockKey)) return;
         inFlightKeysRef.current.add(lockKey);
-        setGmailStatus(googleContactsAccountId, "syncing");
+        setGoogleContactsStatus("syncing");
         try {
             const res = await safeImportRequest<{ count: number; conflicts: number }>(apiPath("/import/google-contacts"), {
                 method: "POST",
@@ -563,15 +602,15 @@ export default function ImportIntegrationsPage() {
             });
             if (res.ok && res.data) {
                 toast.success(`Synced ${res.data.count} Google Contacts.${res.data.conflicts > 0 ? ` Conflicts: ${res.data.conflicts}.` : ""}`);
-                setGmailStatus(googleContactsAccountId, res.data.conflicts > 0 ? "warning" : "success");
+                setGoogleContactsStatus(res.data.conflicts > 0 ? "warning" : "success");
                 await fetchGmailAccounts();
             } else {
                 toast.error(res.message || "Failed to sync Google Contacts.");
-                setGmailStatus(googleContactsAccountId, "error");
+                setGoogleContactsStatus("error");
             }
         } catch {
             toast.error("Network error during Google Contacts sync.");
-            setGmailStatus(googleContactsAccountId, "error");
+            setGoogleContactsStatus("error");
         } finally {
             inFlightKeysRef.current.delete(lockKey);
         }
@@ -883,8 +922,11 @@ export default function ImportIntegrationsPage() {
                                     <RefreshCw className={cn("w-3.5 h-3.5 text-slate-400", Object.values(syncStatus.gmail).some(s => s === "syncing") && "animate-spin")} />
                                     <div className="flex flex-col">
                                         <span className="text-[10px] font-medium text-slate-500">Last Pulse</span>
-                                        <span className="text-[9px] text-red-600 font-medium mt-0.5">
-                                            {globalSettings?.gmailStats?.count || 0} Clients Synced
+                                        <span
+                                            className="text-[9px] text-red-600 font-medium mt-0.5"
+                                            title={`${globalSettings?.gmailStats?.generic ?? 0} Generic · ${globalSettings?.gmailStats?.roleBased ?? 0} Role-Based`}
+                                        >
+                                            {`${globalSettings?.gmailStats?.generic ?? globalSettings?.gmailStats?.count ?? 0}/${globalSettings?.gmailStats?.roleBased ?? 0} Clients Synced`}
                                         </span>
                                     </div>
                                 </div>
@@ -919,8 +961,17 @@ export default function ImportIntegrationsPage() {
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-[9px] text-slate-400 font-medium">Connected Node</span>
                                                     <div className="w-1 h-1 rounded-full bg-slate-200" />
-                                                    <span className="text-[9px] text-blue-600 font-medium">
-                                                        {acc.count || 0} Clients Synced
+                                                    <span
+                                                        className="text-[9px] text-blue-600 font-medium"
+                                                        title={
+                                                            acc.generic != null && acc.roleBased != null && (acc.generic > 0 || acc.roleBased > 0)
+                                                                ? acc.roleBased > 0
+                                                                    ? `${acc.generic} Generic contacts · ${acc.roleBased} Role-Based contacts\n${acc.count || 0} total`
+                                                                    : `${acc.generic} contacts (all generic)`
+                                                                : undefined
+                                                        }
+                                                    >
+                                                        {`${acc.generic ?? acc.count ?? 0}/${acc.roleBased ?? 0} Clients Synced`}
                                                     </span>
                                                 </div>
                                                 <span className="text-[9px] text-slate-500 font-medium truncate" title={profileSummary(effective)}>
@@ -937,6 +988,15 @@ export default function ImportIntegrationsPage() {
                                             >
                                                 Edit Filters
                                             </button>
+                                            {gmailNeedsReauth[acc.id] ? (
+                                                <a
+                                                    href={appPath(`/api/auth/google?intent=both&returnTo=/import&label=${encodeURIComponent(acc.accountName || acc.email)}`)}
+                                                    className="px-3 py-1.5 rounded-lg border border-orange-300 bg-orange-50 text-[10px] font-semibold text-orange-700 hover:bg-orange-100 transition-all flex items-center gap-1.5"
+                                                >
+                                                    <RefreshCw className="w-3 h-3" />
+                                                    Re-auth
+                                                </a>
+                                            ) : (
                                             <button
                                                 onClick={() => handleGmailSync(acc.id, acc.accountName || acc.email, acc.email)}
                                                 disabled={syncStatus.gmail[acc.id] === "syncing"}
@@ -952,6 +1012,7 @@ export default function ImportIntegrationsPage() {
                                                     : <RefreshCw className="w-3 h-3" />}
                                                 {syncStatus.gmail[acc.id] === "syncing" ? "Syncing..." : "Sync Again"}
                                             </button>
+                                            )}
                                             <button
                                                 onClick={() => setDeleteGmailModal({ id: acc.id, name: acc.accountName || acc.email })}
                                                 className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-400 hover:border-red-300 hover:text-red-500 hover:bg-red-50 transition-all"
@@ -1053,11 +1114,11 @@ export default function ImportIntegrationsPage() {
                             {googleContactsConnected && (
                                 <button
                                     onClick={handleGoogleContactsSync}
-                                    disabled={Boolean(!googleContactsAccountId) || syncStatus.gmail[googleContactsAccountId!] === "syncing"}
+                                    disabled={!googleContactsAccountId || googleContactsStatus === "syncing"}
                                     className="w-full h-10 bg-white border border-emerald-200 text-emerald-700 rounded-xl text-[10px] font-semibold hover:bg-emerald-50 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                                 >
-                                    <RefreshCw className={cn("w-3.5 h-3.5", googleContactsAccountId && syncStatus.gmail[googleContactsAccountId] === "syncing" && "animate-spin")} />
-                                    {googleContactsAccountId && syncStatus.gmail[googleContactsAccountId] === "syncing" ? "Syncing..." : "Run Directory Sync"}
+                                    <RefreshCw className={cn("w-3.5 h-3.5", googleContactsStatus === "syncing" && "animate-spin")} />
+                                    {googleContactsStatus === "syncing" ? "Syncing..." : "Run Directory Sync"}
                                 </button>
                             )}
                         </div>
@@ -1444,7 +1505,32 @@ export default function ImportIntegrationsPage() {
                                     <p className="text-sm font-bold text-slate-800">Contact Sync Options</p>
 
                                     <div>
-                                        <p className="text-xs font-semibold text-slate-700 mb-2">1. Sync from</p>
+                                        <p className="text-xs font-semibold text-slate-700 mb-2">1. How far back to sync</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {GMAIL_DURATION_OPTIONS.map((opt) => (
+                                                <button
+                                                    key={opt.value}
+                                                    type="button"
+                                                    title={opt.desc}
+                                                    onClick={() => setGmailSyncProfile((prev) => ({ ...prev, syncDuration: opt.value }))}
+                                                    className={cn(
+                                                        "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all focus-visible:ring-2 focus-visible:ring-blue-100",
+                                                        gmailSyncProfile.syncDuration === opt.value
+                                                            ? "bg-slate-900 text-white border-slate-900"
+                                                            : "bg-white text-slate-500 border-slate-200 hover:border-slate-400"
+                                                    )}
+                                                >
+                                                    {opt.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <p className="mt-1.5 text-xs text-slate-500">
+                                            {GMAIL_DURATION_OPTIONS.find(d => d.value === gmailSyncProfile.syncDuration)?.desc} · contacts from emails in this window will be imported
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <p className="text-xs font-semibold text-slate-700 mb-2">2. Sync from</p>
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                             {([
                                                 { id: "inbox", label: "Inbox", folders: ["INBOX"] as GmailSyncFolder[], desc: "Sync emails received" },
@@ -1473,7 +1559,7 @@ export default function ImportIntegrationsPage() {
                                     </div>
 
                                     <div>
-                                        <p className="text-xs font-semibold text-slate-700 mb-2">2. Extract from</p>
+                                        <p className="text-xs font-semibold text-slate-700 mb-2">3. Extract from</p>
                                         <div className="flex flex-wrap gap-2">
                                             {(["from", "to", "cc", "bcc"] as GmailHeader[]).map((header) => (
                                                 <button
@@ -1587,6 +1673,30 @@ export default function ImportIntegrationsPage() {
                         <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 sm:py-5 space-y-4">
                             <p className="text-[11px] text-slate-600 font-medium">{activeGmailAccountForProfile.name} ({activeGmailAccountForProfile.email})</p>
                             <div className="space-y-3 border border-slate-100 rounded-2xl p-4 sm:p-5 bg-slate-50/50">
+                                <div>
+                                    <label className="text-xs font-semibold text-slate-700 block mb-2">How far back to sync</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {GMAIL_DURATION_OPTIONS.map((opt) => (
+                                            <button
+                                                key={opt.value}
+                                                type="button"
+                                                title={opt.desc}
+                                                onClick={() => setGmailSyncProfile((prev) => ({ ...prev, syncDuration: opt.value }))}
+                                                className={cn(
+                                                    "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all focus-visible:ring-2 focus-visible:ring-blue-100",
+                                                    gmailSyncProfile.syncDuration === opt.value
+                                                        ? "bg-slate-900 text-white border-slate-900"
+                                                        : "bg-white text-slate-500 border-slate-200 hover:border-slate-400"
+                                                )}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="mt-1.5 text-[10px] text-slate-400">
+                                        {GMAIL_DURATION_OPTIONS.find(d => d.value === gmailSyncProfile.syncDuration)?.desc} · contacts are extracted from emails in this window
+                                    </p>
+                                </div>
                                 <div>
                                     <label className="text-xs font-semibold text-slate-700 block mb-2">Sync from</label>
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">

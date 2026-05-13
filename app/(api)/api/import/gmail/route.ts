@@ -8,6 +8,7 @@ const gmailImportSchema = z.object({
     accountId: z.string().min(1, "Account ID required"),
     cleanupMode: z.enum(["none", "safe_cleanup"]).optional(),
     options: z.object({
+        syncDuration: z.enum(["7d", "30d", "90d", "6m", "1y", "all"]).optional(),
         sourceFolders: z.array(z.enum(["INBOX", "SENT", "LABEL"])).min(1).max(3).optional(),
         customLabels: z.array(z.string().min(1)).max(10).optional(),
         extractHeaders: z.array(z.enum(["from", "to", "cc", "bcc"])).min(1).max(4).optional(),
@@ -17,6 +18,9 @@ const gmailImportSchema = z.object({
         includeAutomatedEmails: z.boolean().optional(),
     }).optional(),
 });
+
+// Allow up to 120s for large mailbox syncs (all time / 1 year).
+export const maxDuration = 120;
 
 import { getBackendSession, isApprovedUser } from "@/services/auth";
 

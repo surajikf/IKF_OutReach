@@ -9,7 +9,7 @@ export async function GET(request: Request) {
             return error("UNAUTHORIZED", "Sign in required.", { status: 401 });
         }
 
-        const [accounts, clientCounts] = await Promise.all([
+        const [accounts, clientCounts, roleBasedCounts] = await Promise.all([
             prisma.gmailAccount.findMany({
                 where: { userId: session.user.id },
                 select: {
@@ -25,18 +25,27 @@ export async function GET(request: Request) {
             prisma.client.groupBy({
                 by: ['gmailSourceAccount'],
                 _count: { _all: true },
-                where: { source: 'GMAIL' }
-            })
+                where: { source: 'GMAIL', userId: session.user.id }
+            }),
+            prisma.client.groupBy({
+                by: ['gmailSourceAccount', 'isRoleBased'],
+                _count: { _all: true },
+                where: { source: 'GMAIL', userId: session.user.id }
+            }),
         ]);
 
         const accountList = accounts.map((acc: any) => {
-            const countObj = clientCounts.find(c => 
-                (c.gmailSourceAccount as string)?.toLowerCase() === acc.email?.toLowerCase()
+            const emailLower = acc.email?.toLowerCase();
+            const countObj = clientCounts.find(c =>
+                (c.gmailSourceAccount as string)?.toLowerCase() === emailLower
             );
-            return {
-                ...acc,
-                count: countObj ? countObj._count._all : 0
-            };
+            const total = countObj ? countObj._count._all : 0;
+            const roleRows = roleBasedCounts.filter(c =>
+                (c.gmailSourceAccount as string)?.toLowerCase() === emailLower
+            );
+            const generic = roleRows.find(r => !r.isRoleBased)?._count._all ?? 0;
+            const roleBased = roleRows.find(r => r.isRoleBased)?._count._all ?? 0;
+            return { ...acc, count: total, generic, roleBased };
         });
 
         return ok({ accounts: accountList });
