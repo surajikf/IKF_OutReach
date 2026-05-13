@@ -4,7 +4,7 @@ const prismaClientSingleton = () => {
     let runtimeUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
     if (runtimeUrl && !runtimeUrl.includes("connection_limit")) {
         const separator = runtimeUrl.includes("?") ? "&" : "?";
-        runtimeUrl += `${separator}connection_limit=2`;
+        runtimeUrl += `${separator}connection_limit=10&pool_timeout=20`;
     }
     const baseClient = runtimeUrl
         ? new PrismaClient({ datasourceUrl: runtimeUrl })
