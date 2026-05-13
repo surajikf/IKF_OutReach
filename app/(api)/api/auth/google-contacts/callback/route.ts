@@ -56,6 +56,7 @@ export async function GET(request: Request) {
         refreshTokenEncrypted,
         accessTokenEncrypted: encrypt(accessToken),
         expiresAt,
+        scopeGranted: true,
         lastStatus: "CONTACTS_HEALTHY",
         lastUsed: new Date(),
       },
@@ -66,8 +67,9 @@ export async function GET(request: Request) {
         refreshTokenEncrypted,
         accessTokenEncrypted: encrypt(accessToken),
         expiresAt,
-        scopeGranted: false,
+        scopeGranted: true,
         lastStatus: "CONTACTS_HEALTHY",
+        lastUsed: new Date(),
       },
     });
 

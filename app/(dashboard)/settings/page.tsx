@@ -216,7 +216,7 @@ export default function SettingsPage() {
     if (loading) return <SmartLoader label="Loading Configuration" description="Reading system node settings..." />;
 
     return (
-        <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="w-full space-y-8 pb-20 animate-in fade-in duration-500 px-3 sm:px-4 lg:px-6">
+        <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="w-full space-y-6 pb-14 animate-in fade-in duration-500 px-3 sm:px-4 lg:px-6">
             <PageHeader
                 title="Configuration"
                 subtitle="Manage your system nodes and operational vectors."
@@ -307,7 +307,7 @@ export default function SettingsPage() {
 
                     <div className="p-8 pt-0">
                         {activeTab === "GMAIL" ? (
-                            <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-300">
+                            <div data-onboarding="gmail-section" className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-300">
                                 {/* Identity List */}
                                 <div className="space-y-4">
                                     <div className="flex flex-wrap items-center justify-between px-1 gap-4 border-b border-slate-100 pb-4">

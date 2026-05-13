@@ -20,6 +20,7 @@ import {
 import { SmartLoader } from "@/components/SmartLoader";
 import { DashboardStatsResponse } from "@/shared/types/dashboard";
 import { apiPath, appPath } from "@/lib/app-path";
+import { OnboardingWidget } from "@/components/onboarding/OnboardingWidget";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -103,6 +104,7 @@ export default function Dashboard() {
     updatedAt: new Date().toISOString(),
     confidence: "Low" as const,
   };
+  const canInvoice = Boolean((data as any)?.permissions?.canInvoice);
 
   const summaryCards = [
     { id: "database", label: "Total Clients", title: "Total number of clients in your system", value: safe.stats.totalClients, sub: "total records", icon: Users, accent: "blue" },
@@ -127,36 +129,38 @@ export default function Dashboard() {
   const clientDelta = clientSpark.length > 1 ? clientSpark[clientSpark.length - 1] - clientSpark[0] : 0;
   const campaignDelta = campaignSpark.length > 1 ? campaignSpark[campaignSpark.length - 1] - campaignSpark[0] : 0;
   const activeWarmTotal = Math.max(1, safe.stats.activeClients + safe.stats.warmLeads + safe.stats.pastClients);
+  const isFirstTimeUser =
+    safe.stats.totalClients === 0 &&
+    safe.campaignState.campaigns30d === 0 &&
+    safe.recentCampaigns.length === 0;
 
   return (
     <div className="min-h-screen bg-slate-50/50">
-      <div className="w-full px-4 md:px-8 xl:px-10 py-8 space-y-6">
-        <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 px-2">
+      <div className="w-full px-4 md:px-6 lg:px-8 py-6 space-y-5">
+        <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 px-1">
           <div>
             <p className="text-[10px] font-medium text-blue-600 mb-1">Control Center</p>
             <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Dashboard</h1>
             <p className="text-sm font-medium text-slate-500 mt-1">Easily see your client status and what needs attention next.</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 shadow-sm">
-              <div className="flex items-center gap-1.5">
-                <div 
-                  className={`w-1.5 h-1.5 rounded-full ${safe.confidence === 'High' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-amber-500'}`} 
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200 shadow-sm min-w-0 overflow-hidden">
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div
+                  className={`w-1.5 h-1.5 rounded-full ${safe.confidence === 'High' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-amber-500'}`}
                   title={`${safe.confidence} Confidence`}
                 />
                 <span className="text-[10px] font-bold text-slate-700">{safe.confidence}</span>
               </div>
-              
-              <div className="w-px h-3 bg-slate-200" />
-              
-              <div className="flex items-center gap-3 text-[10px] font-medium text-slate-500">
-                <span title={`Data updated ${formatDistanceToNow(new Date(safe.updatedAt), { addSuffix: true })}`}>
+              <div className="w-px h-3 bg-slate-200 shrink-0" />
+              <div className="flex items-center gap-2 text-[10px] font-medium text-slate-500 min-w-0 truncate">
+                <span className="truncate" title={`Data updated ${formatDistanceToNow(new Date(safe.updatedAt), { addSuffix: true })}`}>
                   Updated {formatDistanceToNow(new Date(safe.updatedAt), { addSuffix: true })}
                 </span>
                 {lastRefreshedAt && (
                   <>
-                    <div className="w-1 h-1 rounded-full bg-slate-300" />
-                    <span title={`Last refreshed ${formatDistanceToNow(lastRefreshedAt, { addSuffix: true })}`}>
+                    <div className="w-1 h-1 rounded-full bg-slate-300 shrink-0" />
+                    <span className="truncate hidden lg:inline" title={`Last refreshed ${formatDistanceToNow(lastRefreshedAt, { addSuffix: true })}`}>
                       Refreshed {formatDistanceToNow(lastRefreshedAt, { addSuffix: true })}
                     </span>
                   </>
@@ -175,6 +179,60 @@ export default function Dashboard() {
           </div>
         </header>
 
+        <OnboardingWidget />
+
+        {isFirstTimeUser && (
+          <section className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <p className="text-[10px] font-semibold text-blue-600 mb-1">First-Time Setup</p>
+                <h2 className="text-xl font-bold text-slate-900">Your personalized dashboard is ready</h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  You are seeing only your own workspace. Start with these three steps.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-2xl border border-slate-200 p-4 bg-slate-50/60">
+                <p className="text-[10px] font-semibold text-slate-500 mb-1">Step 1</p>
+                <h3 className="text-sm font-bold text-slate-900 mb-1">Connect Integrations</h3>
+                <p className="text-xs text-slate-500 mb-3">Connect Gmail or Zoho to start pulling your own data.</p>
+                <button
+                  onClick={() => router.push(appPath("/import"))}
+                  className="w-full py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Open Integrations
+                </button>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 p-4 bg-slate-50/60">
+                <p className="text-[10px] font-semibold text-slate-500 mb-1">Step 2</p>
+                <h3 className="text-sm font-bold text-slate-900 mb-1">Import Clients</h3>
+                <p className="text-xs text-slate-500 mb-3">Your Clients page will stay empty until you import your records.</p>
+                <button
+                  onClick={() => router.push(appPath("/clients"))}
+                  className="w-full py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Go to Clients
+                </button>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 p-4 bg-slate-50/60">
+                <p className="text-[10px] font-semibold text-slate-500 mb-1">Step 3</p>
+                <h3 className="text-sm font-bold text-slate-900 mb-1">Create Campaign</h3>
+                <p className="text-xs text-slate-500 mb-3">Once clients are imported, launch your first outreach campaign.</p>
+                <button
+                  onClick={() => router.push(appPath("/campaigns"))}
+                  className="w-full py-2 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-black"
+                >
+                  Create Campaign
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
         <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {summaryCards.map((card) => (
             <div key={card.id} className="bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm hover:shadow-md transition-shadow group/card" title={card.title}>
@@ -188,15 +246,15 @@ export default function Dashboard() {
           ))}
         </section>
 
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-          <section className="xl:col-span-4 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          <section className="lg:col-span-4 bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
             <p className="text-xs font-medium text-slate-400 mb-3" title="The smartest next step to take based on your current data">Recommended Step</p>
             <h2 className="text-xl font-bold text-slate-900 mb-2 capitalize">{safe.recommendedAction.actionType.replace(/_/g, " ")}</h2>
             <p className="text-sm font-medium text-slate-500 mb-3">{safe.recommendedAction.reason}</p>
             <div className="bg-slate-50 rounded-xl p-3 mb-6">
               <p className="text-[10px] font-medium text-slate-400 mb-1">Expected Impact</p>
               <p className="text-xs font-bold text-blue-700">
-                {safe.recommendedAction.impactEstimate} · Targeting {safe.recommendedAction.targetCount} Clients
+                {safe.recommendedAction.impactEstimate} - Targeting {safe.recommendedAction.targetCount} Clients
               </p>
             </div>
             <button
@@ -208,7 +266,7 @@ export default function Dashboard() {
             </button>
           </section>
 
-          <section className="xl:col-span-5 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
+          <section className="lg:col-span-5 bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-sm font-semibold text-slate-900" title="Key tasks and cleanup actions to keep your business running smoothly">To-Do List</h3>
               <button 
@@ -277,7 +335,7 @@ export default function Dashboard() {
             </div>
           </section>
 
-          <aside className="xl:col-span-3 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
+          <aside className="lg:col-span-3 bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-5">
             <h3 className="text-sm font-semibold text-slate-900 mb-4" title="Deep analysis of your client base through smart grouping">Key Insights</h3>
             <div className="space-y-4">
               <div className="flex justify-between items-center bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
@@ -314,10 +372,12 @@ export default function Dashboard() {
             <div className="pt-6 border-t border-slate-100">
               <div className="text-[10px] font-semibold text-slate-400 mb-4" title="External services successfully connected to your account">Synced Apps</div>
               <div className="space-y-2">
-                <div className="flex justify-between items-center bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                  <span className="text-[10px] font-medium text-indigo-600">Invoices</span>
-                  <span className="text-xs font-semibold text-slate-900">{safe.sourceStats.invoice}</span>
-                </div>
+                {canInvoice && (
+                  <div className="flex justify-between items-center bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                    <span className="text-[10px] font-medium text-indigo-600">Invoices</span>
+                    <span className="text-xs font-semibold text-slate-900">{safe.sourceStats.invoice}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
                   <span className="text-[10px] font-medium text-amber-600">Zoho Bigin</span>
                   <span className="text-xs font-semibold text-slate-900">{safe.sourceStats.zoho}</span>
@@ -369,7 +429,7 @@ export default function Dashboard() {
               No activity yet. Send your first campaign to see updates here.
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {safe.recentCampaigns.slice(0, 4).map((c) => (
                 <div key={c.id} className="bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 hover:bg-white hover:border-blue-200 transition-all group">
                   <div className="text-sm font-bold text-slate-900 truncate mb-1">{c.clientName}</div>

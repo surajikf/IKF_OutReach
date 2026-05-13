@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import { encrypt, decrypt } from "@/services/encryption";
 import { ok, error } from "@/services/api-response";
 import { getGlobalSettings } from "@/services/settings";
-import { getBackendSession } from "@/services/auth";
+import { getBackendSession, hasInvoiceAccess } from "@/services/auth";
 import { z } from "zod";
 
 const MASK = "********";
@@ -40,7 +40,22 @@ const settingsSchema = z.object({
 
 export async function GET(request: Request) {
     try {
-        const settings = await getGlobalSettings();
+        let settings: any;
+        try {
+            settings = await getGlobalSettings();
+        } catch (settingsErr) {
+            console.warn("Settings GET fallback: getGlobalSettings failed, using safe defaults.", settingsErr);
+            settings = {
+                projectName: "IKF Outreach",
+                projectLogo: "",
+                groqApiKey: "",
+                openaiApiKey: "",
+                googleClientId: "",
+                googleClientSecret: "",
+                invoiceApiKey: "",
+                smtpPassEncrypted: "",
+            };
+        }
         const session = await getBackendSession(request);
         
         // Publicly accessible branding info
@@ -53,25 +68,81 @@ export async function GET(request: Request) {
             return ok(brandingInfo);
         }
 
-        // Fetch current user's registered Gmail IDs only
-        const [gmailAccounts, invoiceCount, lastInvoice, gmailCount, lastGmail] = await Promise.all([
-            prisma.gmailAccount.findMany({
-                where: { userId: session.user.id },
-                orderBy: { updatedAt: "desc" }
-            }),
-            prisma.client.count({ where: { source: "INVOICE_SYSTEM" } }),
-            prisma.client.findFirst({
-                where: { source: "INVOICE_SYSTEM" },
-                orderBy: { updatedAt: "desc" },
-                select: { updatedAt: true }
-            }),
-            prisma.client.count({ where: { source: "GMAIL" } }),
-            prisma.client.findFirst({
-                where: { source: "GMAIL" },
-                orderBy: { updatedAt: "desc" },
-                select: { updatedAt: true }
-            })
-        ]);
+        const canInvoice = await hasInvoiceAccess(request);
+        let invoiceAccessRequested = false;
+        try {
+            const userRecord = await prisma.user.findUnique({
+                where: { id: session.user.id },
+                select: { onboardingSkippedSteps: true },
+            });
+            invoiceAccessRequested = Boolean(userRecord?.onboardingSkippedSteps?.includes("invoice_access_requested"));
+        } catch (flagErr) {
+            console.warn("Settings GET: onboardingSkippedSteps unavailable, disabling request flag.", flagErr);
+        }
+        const userScope = { userId: session.user.id };
+
+        // Fetch current user's registered integrations and scoped sync stats.
+        // Keep endpoint resilient if DB schema is partially migrated.
+        let gmailAccounts: any[] = [];
+        let invoiceCount = 0;
+        let lastInvoice: { updatedAt: Date } | null = null;
+        let gmailCount = 0;
+        let lastGmail: { updatedAt: Date } | null = null;
+        let googleContactsCount = 0;
+        let googleContactsLastSyncAt: Date | null = null;
+        try {
+            const contactsAccount = await prisma.gmailAccount.findFirst({
+                where: { ...userScope, lastStatus: "CONTACTS_HEALTHY" },
+                orderBy: { lastUsed: "desc" },
+                select: { lastUsed: true },
+            });
+            googleContactsLastSyncAt = contactsAccount?.lastUsed ?? null;
+
+            [gmailAccounts, invoiceCount, lastInvoice, gmailCount, lastGmail, googleContactsCount] = await Promise.all([
+                prisma.gmailAccount.findMany({
+                    where: userScope,
+                    orderBy: { updatedAt: "desc" },
+                    select: {
+                        id: true,
+                        userId: true,
+                        accountName: true,
+                        email: true,
+                        lastStatus: true,
+                        lastUsed: true,
+                        updatedAt: true,
+                    },
+                }),
+                canInvoice ? prisma.client.count({ where: { ...userScope, source: "INVOICE_SYSTEM" } }) : Promise.resolve(0),
+                prisma.client.findFirst({
+                    where: canInvoice ? { ...userScope, source: "INVOICE_SYSTEM" } : { id: "__none__" },
+                    orderBy: { updatedAt: "desc" },
+                    select: { updatedAt: true }
+                }),
+                prisma.client.count({ where: { ...userScope, source: "GMAIL" } }),
+                prisma.client.findFirst({
+                    where: { ...userScope, source: "GMAIL" },
+                    orderBy: { updatedAt: "desc" },
+                    select: { updatedAt: true }
+                }),
+                // Count only Google Contacts–sourced clients (distinct from Gmail inbox clients)
+                prisma.client.count({
+                    where: {
+                        ...userScope,
+                        source: "GMAIL",
+                        metadata: { path: ["importChannels"], array_contains: "google_contacts" },
+                    },
+                }),
+            ]);
+        } catch (integrationErr) {
+            console.warn("Settings GET: integration stats query failed, using empty defaults.", integrationErr);
+            gmailAccounts = [];
+            invoiceCount = 0;
+            lastInvoice = null;
+            gmailCount = 0;
+            lastGmail = null;
+            googleContactsCount = 0;
+            googleContactsLastSyncAt = null;
+        }
 
         return ok({
             ...settings,
@@ -85,6 +156,14 @@ export async function GET(request: Request) {
                 count: gmailCount,
                 lastSyncAt: lastGmail?.updatedAt || null
             },
+            googleContactsStats: {
+                count: googleContactsCount,
+                lastSyncAt: googleContactsLastSyncAt,
+            },
+            permissions: {
+                canInvoice,
+                invoiceAccessRequested,
+            },
             groqApiKey: settings.groqApiKey ? MASK : "",
             openaiApiKey: settings.openaiApiKey ? MASK : "" ,
             googleClientId: settings.googleClientId ? MASK : "",
@@ -94,7 +173,22 @@ export async function GET(request: Request) {
         });
     } catch (err: any) {
         console.error("Settings GET failure:", err);
-        return error("INTERNAL_ERROR", "Failed to retrieve settings.");
+        return ok({
+            projectName: "IKF Outreach",
+            projectLogo: "",
+            gmailAccounts: [],
+            invoiceStats: { count: 0, lastSyncAt: null },
+            gmailStats: { count: 0, lastSyncAt: null },
+            googleContactsStats: { count: 0, lastSyncAt: null },
+            permissions: { canInvoice: false, invoiceAccessRequested: false },
+            groqApiKey: "",
+            openaiApiKey: "",
+            googleClientId: "",
+            googleClientSecret: "",
+            invoiceApiKey: "",
+            smtpPass: "",
+            degraded: true,
+        });
     }
 }
 

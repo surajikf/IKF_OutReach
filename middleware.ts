@@ -51,6 +51,11 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL(withBasePath('/'), request.url));
     }
 
+    // Force sign-out for deleted accounts
+    if (status === 'DELETED' && pathname !== '/auto-signout') {
+        return NextResponse.redirect(new URL(withBasePath('/auto-signout'), request.url));
+    }
+
     // Redirect users by account status
     if (status === 'PENDING' && pathname !== '/pending-approval' && pathname !== '/login' && pathname !== '/register') {
         return NextResponse.redirect(new URL(withBasePath('/pending-approval'), request.url));

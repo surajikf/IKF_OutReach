@@ -3,10 +3,11 @@
 import { usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useBranding } from "@/hooks/useBranding";
 import { SessionProvider } from "next-auth/react";
 import { IdentitySync } from "../auth/IdentitySync";
+import { OnboardingSpotlight } from "@/components/onboarding/OnboardingSpotlight";
 
 export function ClientWrapper({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -73,6 +74,11 @@ export function ClientWrapper({ children }: { children: React.ReactNode }) {
                     </AnimatePresence>
                 </main>
             </div>
+            {!isAuthPage && (
+                <Suspense>
+                    <OnboardingSpotlight />
+                </Suspense>
+            )}
         </SessionProvider>
     );
 }

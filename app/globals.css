@@ -154,6 +154,18 @@ select,
   background: var(--ring);
 }
 
+/* Onboarding spotlight pulse */
+@keyframes onboarding-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+}
+.onboarding-pulse {
+  outline: 2px solid #3b82f6;
+  outline-offset: 3px;
+  border-radius: 0.5rem;
+  animation: onboarding-pulse 1.8s ease-in-out infinite;
+}
+
 /* Strict Professional UI Utility Overrides */
 /* 
  We intentionally avoid heavy custom animations (e.g. bouncy hovers) 

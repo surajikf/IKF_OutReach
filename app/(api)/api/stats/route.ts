@@ -62,11 +62,12 @@ export async function GET(request: Request) {
                     serviceName: true,
                     _count: {
                         select: {
-                            clients: true
+                            clients: {
+                                where: userFilter
+                            }
                         }
                     }
-                },
-                orderBy: { clients: { _count: 'desc' } }
+                }
             }),
             // Data integrity (count missing fields instead of fetching all)
             Promise.all([
@@ -136,7 +137,9 @@ export async function GET(request: Request) {
             }),
         ]);
         const zohoConnected = userId ? await prisma.zohoConnection.count({ where: { userId } }) : 0;
-        const integrationReady = !!(zohoConnected > 0 || integrationConfig?.googleRefreshTokenEncrypted || gmailAccounts.length > 0);
+        const integrationReady = isAdmin
+            ? !!(zohoConnected > 0 || integrationConfig?.googleRefreshTokenEncrypted || gmailAccounts.length > 0)
+            : !!(zohoConnected > 0 || gmailAccounts.length > 0);
 
         const totalClients = dataIntegrityRaw[0];
         const completeProfiles = dataIntegrityRaw[1];
@@ -257,6 +260,9 @@ export async function GET(request: Request) {
         });
 
         return ok({
+            permissions: {
+                canInvoice,
+            },
             stats: {
                 totalClients,
                 activeClients: statsMap["Active"],
@@ -284,8 +290,7 @@ export async function GET(request: Request) {
                 date: c.dateCreated,
                 status: "Sent"
             })),
-            sourceStats
-            ,
+            sourceStats,
             dataHealth,
             audienceState,
             campaignState,
@@ -296,7 +301,40 @@ export async function GET(request: Request) {
         });
     } catch (err) {
         console.error("Failed to fetch stats:", err);
-        return error("INTERNAL_ERROR", "Failed to fetch stats");
+        return ok({
+            permissions: { canInvoice: false },
+            stats: {
+                totalClients: 0,
+                activeClients: 0,
+                warmLeads: 0,
+                pastClients: 0,
+                trends: {
+                    clients: "0",
+                    engagement: "0",
+                    growth: "0%",
+                    sparklines: { clients: [], campaigns: [] },
+                },
+            },
+            chartData: [],
+            industryDistribution: [],
+            serviceUtilization: [],
+            integrityScore: 100,
+            recentCampaigns: [],
+            sourceStats: { zoho: 0, invoice: 0, gmail: [] },
+            dataHealth: { completeness: 100, staleRecords: 0, profileIntegrity: 100 },
+            audienceState: { activeRatio: 0, warmRatio: 0, pastRatio: 0, noContact30d: 0 },
+            campaignState: { lastCampaignAt: null, campaigns7d: 0, campaigns30d: 0, testDispatchFailures: 0 },
+            recommendedAction: {
+                actionType: "launch_targeted",
+                reason: "Start by importing your own contacts and creating your first campaign.",
+                impactEstimate: "Personalized workspace is ready for your data.",
+                targetCount: 0,
+                ctaRoute: "/import",
+            },
+            processChecklist: [],
+            updatedAt: new Date().toISOString(),
+            confidence: "Low",
+        });
     }
 }
 

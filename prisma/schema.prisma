@@ -171,6 +171,10 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
+  // Onboarding
+  onboardingDismissed    Boolean  @default(false)
+  onboardingSkippedSteps String[] @default([])
+
   drafts          EmailDraft[]
   gmailAccounts   GmailAccount[]
   zohoConnection  ZohoConnection?

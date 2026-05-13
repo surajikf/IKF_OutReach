@@ -6,9 +6,11 @@ export async function GET(request: Request) {
     try {
         const session = await getBackendSession(request);
         const userId = session?.user?.id;
+        const isAdmin = session?.user?.role === "ADMIN";
+        const scopedWhere = isAdmin ? {} : { userId: userId ?? "__none__" };
 
         const [totalClients, integrationConfig] = await Promise.all([
-            prisma.client.count(),
+            prisma.client.count({ where: scopedWhere }),
             prisma.globalSettings.findUnique({
                 where: { id: "singleton" },
                 select: {
@@ -23,7 +25,9 @@ export async function GET(request: Request) {
                 ? prisma.zohoConnection.count({ where: { userId } })
                 : Promise.resolve(0),
         ]);
-        const integrationReady = !!(zohoConnected > 0 || integrationConfig?.googleRefreshTokenEncrypted || totalAccounts > 0);
+        const integrationReady = isAdmin
+            ? !!(zohoConnected > 0 || integrationConfig?.googleRefreshTokenEncrypted || totalAccounts > 0)
+            : !!(zohoConnected > 0 || totalAccounts > 0);
 
         return NextResponse.json({
             totalClients,

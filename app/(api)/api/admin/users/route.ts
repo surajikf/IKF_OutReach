@@ -17,6 +17,7 @@ export async function GET(req: Request) {
                 role: true,
                 status: true,
                 canAccessInvoiceData: true,
+                onboardingSkippedSteps: true,
                 createdAt: true,
                 updatedAt: true,
             },
@@ -43,18 +44,27 @@ export async function PUT(req: Request) {
             return error("BAD_REQUEST", "UserId and action are required.");
         }
 
-        const target = await prisma.user.findUnique({ where: { id: userId } });
+        const target = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                email: true,
+                role: true,
+                status: true,
+                canAccessInvoiceData: true,
+                onboardingSkippedSteps: true,
+            },
+        });
+
         if (!target) {
             return error("NOT_FOUND", "User not found in database.");
         }
 
         const actorId = session.user.id;
-        const actorEmail = (session.user.email || "").toLowerCase();
         const targetEmail = (target.email || "").toLowerCase();
         const isSelf = actorId === target.id;
         const isPrimaryAdmin = targetEmail === "suraj.sonnar@ikf.co.in";
 
-        // Base protections
         if (isPrimaryAdmin && (action === "BAN" || action === "REVOKE_ADMIN" || action === "DELETE_USER")) {
             return error("BAD_REQUEST", "Cannot revoke, demote, or delete the primary administrator.");
         }
@@ -102,16 +112,27 @@ export async function PUT(req: Request) {
                 if (target.role !== "ADMIN") return ok({ updated: false, user: target });
                 updateData.role = "USER" as UserRole;
                 break;
-            case "GRANT_INVOICE_ACCESS":
-                if (target.canAccessInvoiceData) return ok({ updated: false, user: target });
+            case "GRANT_INVOICE_ACCESS": {
+                const skipped = target.onboardingSkippedSteps || [];
+                const hasStaleRequest = skipped.includes("invoice_access_requested");
+                if (target.canAccessInvoiceData && !hasStaleRequest) return ok({ updated: false, user: target });
                 updateData.canAccessInvoiceData = true;
+                updateData.onboardingSkippedSteps = {
+                    set: skipped.filter((s) => s !== "invoice_access_requested"),
+                };
                 break;
+            }
             case "REVOKE_INVOICE_ACCESS":
                 if (isPrimaryAdmin || target.role === "ADMIN") {
                     return error("BAD_REQUEST", "Cannot revoke invoice access from an administrator.");
                 }
                 if (!target.canAccessInvoiceData) return ok({ updated: false, user: target });
                 updateData.canAccessInvoiceData = false;
+                break;
+            case "CLEAR_INVOICE_REQUEST":
+                updateData.onboardingSkippedSteps = {
+                    set: (target.onboardingSkippedSteps || []).filter((s) => s !== "invoice_access_requested"),
+                };
                 break;
             case "DELETE_USER":
                 await prisma.user.delete({ where: { id: userId } });
@@ -131,4 +152,3 @@ export async function PUT(req: Request) {
         return error("INTERNAL_ERROR", "Failed to update user.");
     }
 }
-

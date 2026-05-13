@@ -487,21 +487,48 @@ export default function ClientManager() {
             query.append("sortDir", sortDir);
 
             const res = await fetch(apiPath(`/clients?${query.toString()}`), { signal: abortControllerRef.current.signal });
-            const result = await res.json();
+            const contentType = res.headers.get("content-type") || "";
+            let result: any = null;
+            if (contentType.includes("application/json")) {
+                result = await res.json();
+            } else {
+                const text = await res.text().catch(() => "");
+                throw new Error(text || `Unexpected response (${res.status})`);
+            }
             
-            if (result.success) {
+            if (res.ok && result?.success) {
                 const { clients: fetchedClients, total: fetchedTotal, sourceStats: fetchedSourceStats, filterStats: fetchedFilterStats } = result.data;
                 setClients(fetchedClients || []);
                 setTotal(fetchedTotal || 0);
                 setSourceStats(fetchedSourceStats || {});
                 if (fetchedFilterStats) setFilterStats(fetchedFilterStats);
             } else {
-                console.error("API Error:", result.error);
+                const rawError = result?.error;
+                const errorCode = typeof rawError?.code === "string" ? rawError.code : "";
+                const detailText =
+                    typeof rawError?.details === "string"
+                        ? rawError.details
+                        : rawError?.details?.message || rawError?.details?.reason || "";
+                const apiMessage =
+                    result?.error?.message ||
+                    result?.message ||
+                    detailText ||
+                    `Failed to load clients (${res.status}${res.statusText ? ` ${res.statusText}` : ""})`;
+                const normalizedError = {
+                    code: errorCode || "UNKNOWN_ERROR",
+                    message: apiMessage,
+                    status: res.status,
+                };
+                console.error("API Error:", normalizedError, { raw: result });
+                toast.error(apiMessage);
                 setClients([]);
                 setTotal(0);
             }
         } catch (err: any) {
-            if (err.name !== 'AbortError') console.error(err);
+            if (err.name !== 'AbortError') {
+                console.error(err);
+                toast.error(err?.message || "Failed to load clients.");
+            }
         } finally {
             setLoading(false);
         }
@@ -823,7 +850,7 @@ export default function ClientManager() {
     };
 
     return (
-        <div className="space-y-6 w-full max-w-[100vw] px-4 md:px-6 lg:px-8 pb-20">
+        <div className="space-y-4 w-full max-w-[100vw] px-3 md:px-5 lg:px-6 pb-16">
             {/* Single compact header row */}
             <div className="flex items-center justify-between gap-4 px-2 py-1">
                 <div className="flex items-center gap-4">
@@ -893,9 +920,9 @@ export default function ClientManager() {
 
             {view === "clients" || view === "rolebased" ? (
                 <>
-                    <div className="sticky top-4 z-40 flex flex-col gap-3 bg-white/80 backdrop-blur-xl p-5 rounded-3xl border border-slate-200/50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all">
+                    <div className="sticky top-3 z-40 flex flex-col gap-2.5 bg-white/80 backdrop-blur-xl p-4 rounded-2xl border border-slate-200/50 shadow-[0_4px_20px_rgb(0,0,0,0.04)] transition-all">
                     <div className="flex flex-wrap items-center gap-4">
-                            <div className="flex flex-1 min-w-[300px] items-center gap-3 px-5 py-3 bg-slate-100/50 rounded-2xl group focus-within:bg-white border border-transparent focus-within:border-blue-500/30 focus-within:ring-4 focus-within:ring-blue-50/50 transition-all duration-500">
+                            <div className="flex flex-1 min-w-[200px] items-center gap-3 px-4 py-2.5 bg-slate-100/50 rounded-2xl group focus-within:bg-white border border-transparent focus-within:border-blue-500/30 focus-within:ring-4 focus-within:ring-blue-50/50 transition-all duration-500">
                                 <Search className="w-5 h-5 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
                                 <input
                                     type="text"
@@ -913,7 +940,7 @@ export default function ClientManager() {
 
                             <div className="flex flex-wrap gap-2">
                                 <FilterPopover
-                                    label="Status"
+                                    label="Relationship"
                                     options={levels}
                                     selected={filterLevel}
                                     onToggle={(val: string) => toggleFilter(setFilterLevel, filterLevel, val)}
@@ -1000,27 +1027,27 @@ export default function ClientManager() {
                                 </p>
                             </div>
                         )}
-                        <table className="w-full text-left border-collapse overflow-hidden">
+                        <table className="w-full text-left border-collapse overflow-hidden min-w-[780px]">
                             <thead>
                                 <tr className="bg-slate-50/50 border-b border-slate-100 text-[10px] sm:text-[11px]">
                                     {isSimpleGmailView ? (
                                         <>
-                                            <th className="px-6 py-6 font-medium text-slate-400 w-[28%]">Name</th>
-                                            <th className="px-6 py-6 font-medium text-slate-400 w-[35%]">Email</th>
-                                            <th className="px-6 py-6 font-medium text-slate-400 w-[22%]">Last Outreach</th>
-                                            <th className="px-6 py-6 font-medium text-slate-400 w-[10%]">Contacted</th>
-                                            <th className="px-6 py-6 w-16"></th>
+                                            <th className="px-4 py-4 font-medium text-slate-400 w-[28%]">Name</th>
+                                            <th className="px-4 py-4 font-medium text-slate-400 w-[35%]">Email</th>
+                                            <th className="px-4 py-4 font-medium text-slate-400 w-[22%]">Last Outreach</th>
+                                            <th className="px-4 py-4 font-medium text-slate-400 w-[10%]">Contacted</th>
+                                            <th className="px-4 py-4 w-14"></th>
                                         </>
                                     ) : (
                                         <>
-                                            <th className="px-4 py-6 font-medium text-slate-400 w-12 text-center">Sr.</th>
-                                            <th className="px-6 py-6 font-medium text-slate-400 w-[30%]">Client Profile</th>
-                                            {showServicesColumn && <th className="px-6 py-6 font-medium text-slate-400 w-[15%]">Services</th>}
-                                            <th className="px-6 py-6 font-medium text-slate-400 w-[20%]">Contact Info</th>
-                                            {activeSourceTab !== "GMAIL" && <th className="px-6 py-6 font-medium text-slate-400 w-[15%]">Engagement</th>}
-                                            <th className="px-6 py-6 font-medium text-slate-400 w-[10%]" title="Billing relationship level synced from Invoice System. Active = recent invoices found. Not Active = no recent billing activity.">Relationship</th>
-                                            {activeSourceTab === "ALL" && <th className="px-6 py-6 font-medium text-slate-400 w-[10%]">Source</th>}
-                                            <th className="px-6 py-6 text-right w-20"></th>
+                                            <th className="px-3 py-4 font-medium text-slate-400 w-10 text-center">Sr.</th>
+                                            <th className="px-4 py-4 font-medium text-slate-400 w-[30%]">Client Profile</th>
+                                            {showServicesColumn && <th className="px-4 py-4 font-medium text-slate-400 w-[14%]">Services</th>}
+                                            <th className="px-4 py-4 font-medium text-slate-400 w-[18%]">Contact Info</th>
+                                            {activeSourceTab !== "GMAIL" && <th className="px-4 py-4 font-medium text-slate-400 w-[13%]">Engagement</th>}
+                                            <th className="px-4 py-4 font-medium text-slate-400 w-[10%]" title="Billing relationship level synced from Invoice System. Active = recent invoices found. Not Active = no recent billing activity.">Relationship</th>
+                                            {activeSourceTab === "ALL" && <th className="px-4 py-4 font-medium text-slate-400 w-[9%]">Source</th>}
+                                            <th className="px-4 py-4 text-right w-16"></th>
                                         </>
                                     )}
                                 </tr>

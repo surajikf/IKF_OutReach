@@ -26,6 +26,7 @@ import {
     Building2,
     Mail,
     Database,
+    BookUser,
     ChevronRight,
     Loader2,
     Clock,
@@ -60,7 +61,7 @@ const campaignTypes = [
     },
 ];
 
-type AudienceSource = "INVOICE_SYSTEM" | "ZOHO_BIGIN" | "GMAIL";
+type AudienceSource = "INVOICE_SYSTEM" | "ZOHO_BIGIN" | "GMAIL" | "GOOGLE_CONTACTS";
 
 const audienceSourceOptions: Array<{
     id: AudienceSource;
@@ -90,12 +91,20 @@ const audienceSourceOptions: Array<{
         note: "Email contacts only, no invoice data.",
         icon: Mail,
     },
+    {
+        id: "GOOGLE_CONTACTS",
+        name: "Google Contacts",
+        desc: "Use contacts from your Google directory.",
+        note: "Directory contacts with email addresses.",
+        icon: BookUser,
+    },
 ];
 
 const recommendedObjectiveBySource: Record<AudienceSource, string> = {
     INVOICE_SYSTEM: "Cross-Sell",
     ZOHO_BIGIN: "Targeted",
     GMAIL: "Broadcast",
+    GOOGLE_CONTACTS: "Broadcast",
 };
 
 const smartContentGuide: Record<AudienceSource, Record<string, { subject: string; body: string; tip: string }>> = {
@@ -163,6 +172,28 @@ const smartContentGuide: Record<AudienceSource, Record<string, { subject: string
             subject: "Reconnecting with {{companyName}}",
             body: "Start with a short reconnection note.",
             tip: "Ask an easy yes/no follow-up question.",
+        },
+    },
+    GOOGLE_CONTACTS: {
+        Broadcast: {
+            subject: "A quick update for {{companyName}}",
+            body: "Share a concise, friendly update with a clear call to action.",
+            tip: "Keep it short — directory contacts may have limited prior context.",
+        },
+        Targeted: {
+            subject: "Reaching out to {{companyName}}",
+            body: "Write a warm, personalised introduction or follow-up.",
+            tip: "Focus on one topic; make it easy to reply.",
+        },
+        "Cross-Sell": {
+            subject: "Something that might help {{companyName}}",
+            body: "Suggest one relevant service or offering with brief context.",
+            tip: "Lead with a benefit, not a feature.",
+        },
+        Reactivation: {
+            subject: "Checking in with {{companyName}}",
+            body: "Reconnect with a light, low-pressure message.",
+            tip: "Reference any shared context if available.",
         },
     },
 };
@@ -1101,8 +1132,8 @@ export default function CampaignGenerator() {
     };
 
     return (
-        <div className="w-full pb-14 md:pb-20 px-3 sm:px-4 lg:px-6">
-            <div className="mb-6 md:mb-8">
+        <div className="w-full pb-12 px-3 sm:px-4 lg:px-6">
+            <div data-onboarding="new-campaign-btn" className="mb-6 md:mb-8">
                 <h2 className="text-xl font-semibold tracking-tight text-slate-900">Campaign Builder</h2>
                 <p className="text-sm text-slate-500 mt-1">Choose options and generate your campaign.</p>
                 <div className="mt-4 bg-white border border-slate-200 rounded-lg px-4 py-3">
@@ -1118,7 +1149,7 @@ export default function CampaignGenerator() {
                 </div>
             </div>
 
-            <div className="flex flex-col lg:flex-row gap-4 md:gap-6 lg:gap-8 items-stretch lg:items-start">
+            <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 items-stretch lg:items-start">
                 <div className="flex-1 space-y-5 md:space-y-6 lg:space-y-8 min-w-0 w-full">
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                         <div className="px-4 sm:px-5 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
@@ -1215,7 +1246,7 @@ export default function CampaignGenerator() {
                     </div>
                 </div>
 
-                <div className="w-full lg:w-[22rem] 2xl:w-96 flex-shrink-0 self-start lg:sticky lg:top-4 space-y-4 md:space-y-6">
+                <div className="w-full lg:w-72 xl:w-80 2xl:w-[22rem] flex-shrink-0 self-start lg:sticky lg:top-4 space-y-4">
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                         <div className="px-4 sm:px-5 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
                             <Network className="w-4 h-4 text-blue-600" />

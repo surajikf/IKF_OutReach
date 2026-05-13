@@ -98,43 +98,58 @@ export async function runGoogleContactsSync(accountId: string) {
   const existingMap = new Map(existing.map((c) => [String(c.email).toLowerCase(), c.source]));
 
   let conflicts = 0;
+  let synced = 0;
   for (const c of entries) {
     const existingSource = existingMap.get(c.email);
     if (existingSource && existingSource !== "GMAIL") conflicts += 1;
     const resolvedName = c.name || deriveNameFromEmail(c.email) || "Anonymous Contact";
-    const prev = await prisma.client.findUnique({ where: { email: c.email }, select: { metadata: true } });
+    // Only read metadata for records owned by this user
+    const prev = await prisma.client.findFirst({
+      where: { email: c.email, userId: account.userId },
+      select: { metadata: true },
+    });
     const prevMeta = prev?.metadata && typeof prev.metadata === "object" ? (prev.metadata as any) : {};
     const channels = Array.isArray(prevMeta.importChannels) ? prevMeta.importChannels : [];
     const meta = { ...prevMeta, importChannels: Array.from(new Set([...channels, "google_contacts"])) };
 
-    await prisma.client.upsert({
-      where: {
-        source_externalId: {
+    try {
+      await prisma.client.upsert({
+        where: {
+          source_externalId: {
+            source: "GMAIL",
+            externalId: `${account.id}:google_contacts:${c.email}`,
+          },
+        },
+        update: {
+          clientName: resolvedName,
+          contactPerson: resolvedName,
+          gmailSourceAccount: account.email,
+          metadata: meta,
+        },
+        create: {
+          clientName: resolvedName,
+          contactPerson: resolvedName,
+          email: c.email,
+          industry: "Corporate",
+          relationshipLevel: "Warm Lead",
           source: "GMAIL",
           externalId: `${account.id}:google_contacts:${c.email}`,
+          gmailSourceAccount: account.email,
+          userId: account.userId,
+          metadata: { importChannels: ["google_contacts"] },
         },
-      },
-      update: {
-        clientName: resolvedName,
-        contactPerson: resolvedName,
-        gmailSourceAccount: account.email,
-        metadata: meta,
-      },
-      create: {
-        clientName: resolvedName,
-        contactPerson: resolvedName,
-        email: c.email,
-        industry: "Corporate",
-        relationshipLevel: "Warm Lead",
-        source: "GMAIL",
-        externalId: `${account.id}:google_contacts:${c.email}`,
-        gmailSourceAccount: account.email,
-        userId: account.userId,
-        metadata: { importChannels: ["google_contacts"] },
-      },
-    });
+      });
+      synced += 1;
+    } catch (e: any) {
+      // P2002: email already owned by another user — skip silently, count as conflict
+      if (e?.code === "P2002") {
+        conflicts += 1;
+      } else {
+        throw e;
+      }
+    }
   }
 
-  return { count: entries.length, conflicts };
+  return { count: synced, conflicts };
 }
 

@@ -72,7 +72,8 @@ export async function GET(request: Request) {
         const session = await getBackendSession(request);
         const userId = session?.user?.id;
         const isAdmin = session?.user?.role === "ADMIN";
-        const scopedUserId = isAdmin ? undefined : userId;
+        // Each user (including admins) manages their own client list — no cross-user visibility.
+        const scopedUserId = userId;
         const { searchParams } = new URL(request.url);
         const industries = searchParams.getAll("industry");
         const levels = searchParams.getAll("level");
@@ -278,7 +279,11 @@ export async function GET(request: Request) {
         });
     } catch (err: any) {
         console.error("CRITICAL API ERROR:", err);
-        return error("INTERNAL_ERROR", `API Logic Failed: ${err.message || 'Unknown Error'}`, { 
+        const safeMessage =
+            typeof err?.message === "string" && err.message.trim().length > 0
+                ? err.message
+                : "Unexpected server failure while loading clients.";
+        return error("INTERNAL_ERROR", `API Logic Failed: ${safeMessage}`, { 
             details: { 
                 name: err.name,
                 stack: err.stack,

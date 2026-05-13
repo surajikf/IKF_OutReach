@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import { resolveUserClaims } from "@/services/auth-claims";
+import { resolveUserClaims, lookupUserClaims } from "@/services/auth-claims";
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -14,9 +14,12 @@ export const authOptions: NextAuthOptions = {
       clientSecret: googleClientSecret || "",
       authorization: {
         params: {
-          scope: "openid email profile https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://mail.google.com/",
+          scope: "openid email profile",
           access_type: "offline",
-          prompt: "consent",
+          // No prompt: "consent" — Google remembers previous approval.
+          // Gmail scopes are requested separately via /api/auth/google
+          // when the user explicitly connects a Gmail account in Settings.
+          prompt: "select_account",
         },
       },
     }),
@@ -52,15 +55,18 @@ export const authOptions: NextAuthOptions = {
       const email = (token.email || "").trim().toLowerCase();
       if (email) {
         try {
-          const user = await resolveUserClaims(email, (profile as any)?.name || null);
+          // Use read-only lookup during JWT refresh — prevents deleted users from self-resurrecting.
+          // resolveUserClaims (upsert) is only called during signIn above.
+          const user = await lookupUserClaims(email);
           if (user) {
             token.sub = user.id;
             (token as any).role = user.role;
             (token as any).status = user.status;
             (token as any).invoiceAccess = Boolean(user.canAccessInvoiceData);
           } else {
+            // User not found in DB (deleted by admin) — force sign-out
             (token as any).role = "USER";
-            (token as any).status = "PENDING";
+            (token as any).status = "DELETED";
             (token as any).invoiceAccess = false;
           }
         } catch (error) {

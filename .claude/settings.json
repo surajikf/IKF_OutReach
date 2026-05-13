@@ -38,10 +38,14 @@
       "PowerShell(cd \"e:\\\\Cursor\\\\FINAL\\\\IKF_OutReach\"; $env:DATABASE_URL=\"postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres\"; $env:DIRECT_URL=\"postgresql://postgres.cvhofvxzqlluxkxkwkzr:Suraj%4008051992@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres\"; npx prisma db push 2>&1)",
       "Bash(xargs grep *)",
       "Bash(npx tsc *)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(taskkill /PID 8236 /F)",
+      "PowerShell(Stop-Process -Id 8236 -Force)",
+      "PowerShell(Get-Process | Where-Object { $_.ProcessName -match \"node\" } | Select-Object Id, ProcessName, CPU, StartTime | Format-Table)"
     ],
     "additionalDirectories": [
-      "e:\\Cursor\\FINAL\\IKF_OutReach\\app\\(dashboard)\\campaigns\\list"
+      "e:\\Cursor\\FINAL\\IKF_OutReach\\app\\(dashboard)\\campaigns\\list",
+      "e:\\Cursor\\FINAL\\IKF_OutReach\\app\\(api)\\api"
     ]
   }
 }

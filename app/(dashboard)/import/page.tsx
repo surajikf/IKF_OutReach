@@ -126,6 +126,8 @@ export default function ImportIntegrationsPage() {
         gmail: Record<string, ImportSyncStatus>;
     }>({ invoice: "idle", zoho: "idle", gmail: {} });
     const inFlightKeysRef = useRef<Set<string>>(new Set());
+    const canInvoice = Boolean(globalSettings?.permissions?.canInvoice);
+    const invoiceAccessRequested = Boolean(globalSettings?.permissions?.invoiceAccessRequested);
 
     const setGmailStatus = (accountId: string, status: ImportSyncStatus) => {
         setSyncStatus((prev) => ({ ...prev, gmail: { ...prev.gmail, [accountId]: status } }));
@@ -583,6 +585,28 @@ export default function ImportIntegrationsPage() {
     };
 
     const handleInvoiceSync = async () => {
+        if (!canInvoice) {
+            if (invoiceAccessRequested) {
+                toast.info("Invoice access request already submitted. Waiting for admin approval.");
+                return;
+            }
+            try {
+                const res = await fetch(apiPath("/invoice-access/request"), { method: "POST" });
+                const result = await res.json();
+                if (!res.ok || !result?.success) {
+                    throw new Error(result?.error?.message || "Failed to submit request.");
+                }
+                if (result?.data?.unsupported) {
+                    toast.error("Invoice access request tracking is unavailable on this deployment. Contact admin.");
+                    return;
+                }
+                toast.success("Invoice access request submitted to admin.");
+                await fetchGlobalSettings();
+            } catch (err: any) {
+                toast.error(err?.message || "Could not submit invoice access request.");
+            }
+            return;
+        }
         const lockKey = "invoice";
         if (inFlightKeysRef.current.has(lockKey)) return;
         inFlightKeysRef.current.add(lockKey);
@@ -689,7 +713,7 @@ export default function ImportIntegrationsPage() {
     if (loading) return <SmartLoader label="Initializing Studio" description="Connecting to data nodes..." />;
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500 pb-20 w-full px-3 sm:px-4 lg:px-6">
+        <div className="space-y-6 animate-in fade-in duration-500 pb-14 w-full px-3 sm:px-4 lg:px-6">
             <header className="px-2">
                 <div className="flex items-center gap-3 text-blue-600 mb-2">
                     <DownloadCloud className="w-5 h-5" />
@@ -699,7 +723,7 @@ export default function ImportIntegrationsPage() {
                 <p className="text-sm text-slate-500 mt-1">Connect external data channels and synchronize your client base.</p>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div data-onboarding="import-section" className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Invoice System Card */}
                 <div className={cn(
                     "group relative bg-white rounded-3xl border border-slate-200 p-6 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/5 hover:-translate-y-1 overflow-hidden",
@@ -716,18 +740,23 @@ export default function ImportIntegrationsPage() {
                                 <span className="text-[10px] font-medium text-slate-400">Main Source</span>
                                 <div className={cn(
                                     "mt-1 px-2 py-0.5 rounded-full text-[9px] font-medium",
-                                    syncStatus.invoice === "success" ? "bg-emerald-100 text-emerald-600" : 
+                                    !canInvoice ? "bg-slate-100 text-slate-500" :
+                                    syncStatus.invoice === "success" ? "bg-emerald-100 text-emerald-600" :
                                     syncStatus.invoice === "error" ? "bg-red-100 text-red-600" :
                                     syncStatus.invoice === "warning" ? "bg-amber-100 text-amber-600" : "bg-slate-100 text-slate-500"
                                 )}>
-                                    {syncStatus.invoice === "syncing" ? "Syncing..." : syncStatus.invoice === "idle" ? "Ready" : syncStatus.invoice}
+                                    {!canInvoice ? (invoiceAccessRequested ? "Requested" : "Locked") : syncStatus.invoice === "syncing" ? "Syncing..." : syncStatus.invoice === "idle" ? "Ready" : syncStatus.invoice}
                                 </div>
                             </div>
                         </div>
 
                         <div className="mb-8">
                             <h3 className="text-lg font-bold text-slate-900 mb-1">Internal Invoice System</h3>
-                            <p className="text-sm text-slate-500 font-medium">Secondary source for client financial profiles.</p>
+                            <p className="text-sm text-slate-500 font-medium">
+                                {canInvoice
+                                    ? "Secondary source for client financial profiles."
+                                    : "Restricted. Ask an admin to enable invoice access for your account."}
+                            </p>
                         </div>
 
                         <div className="space-y-4">
@@ -735,13 +764,13 @@ export default function ImportIntegrationsPage() {
                                 <div className="flex items-center gap-2">
                                     <RefreshCw className={cn("w-3.5 h-3.5 text-slate-400", syncStatus.invoice === "syncing" && "animate-spin")} />
                                     <div className="flex flex-col">
-                                        <span className="text-[10px] font-medium text-slate-500">Last Pulse</span>
+                                <span className="text-[10px] font-medium text-slate-500">Last Pulse</span>
                                         <span className="text-[9px] text-blue-600 font-medium mt-0.5">
-                                            {globalSettings?.invoiceStats?.count || 0} Clients Synced
+                                            {canInvoice ? `${globalSettings?.invoiceStats?.count || 0} Clients Synced` : invoiceAccessRequested ? "Request pending admin approval" : "Access required"}
                                         </span>
                                     </div>
                                 </div>
-                                <span className="text-xs font-semibold text-slate-700">{invoiceLastSync}</span>
+                                <span className="text-xs font-semibold text-slate-700">{canInvoice ? invoiceLastSync : "—"}</span>
                             </div>
 
                             {invoiceSyncNote && (
@@ -754,17 +783,22 @@ export default function ImportIntegrationsPage() {
                             <button 
                                 onClick={handleInvoiceSync}
                                 disabled={syncStatus.invoice === "syncing"}
-                                className="w-full h-12 bg-blue-600 text-white rounded-2xl text-[10px] font-semibold hover:bg-blue-700 transition-all active:scale-[0.98] shadow-lg shadow-blue-600/20 flex items-center justify-center gap-3 disabled:opacity-50"
+                                className={cn(
+                                    "w-full h-12 rounded-2xl text-[10px] font-semibold transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-50",
+                                    canInvoice
+                                        ? "bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/20"
+                                        : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                                )}
                             >
                                 {syncStatus.invoice === "syncing" ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                                Sync Now
+                                {canInvoice ? "Sync Now" : invoiceAccessRequested ? "Requested" : "Request Access"}
                             </button>
                         </div>
                     </div>
                 </div>
 
                 {/* Zoho Bigin Card */}
-                <div className={cn(
+                <div data-onboarding="bigin-section" className={cn(
                     "group relative bg-white rounded-3xl border border-slate-200 p-6 transition-all duration-300 hover:shadow-xl hover:shadow-orange-500/5 hover:-translate-y-1 overflow-hidden",
                     syncStatus.zoho === "syncing" && "ring-2 ring-orange-500 ring-offset-2"
                 )}>
@@ -965,7 +999,7 @@ export default function ImportIntegrationsPage() {
                 </div>
 
                 {/* Google Contacts Card */}
-                <div className="group relative bg-white rounded-3xl border border-slate-200 p-6 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/5 hover:-translate-y-1 overflow-hidden">
+                <div data-onboarding="google-contacts-section" className="group relative bg-white rounded-3xl border border-slate-200 p-6 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/5 hover:-translate-y-1 overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-110" />
                     <div className="relative">
                         <div className="flex items-start justify-between mb-6">
@@ -995,13 +1029,13 @@ export default function ImportIntegrationsPage() {
                                     <div className="flex flex-col">
                                         <span className="text-[10px] font-medium text-slate-500">Last Pulse</span>
                                         <span className="text-[9px] text-emerald-600 font-medium mt-0.5">
-                                            {googleContactsConnected ? (globalSettings?.gmailStats?.count || 0) : 0} Contacts Synced
+                                            {googleContactsConnected ? (globalSettings?.googleContactsStats?.count || 0) : 0} Contacts Synced
                                         </span>
                                     </div>
                                 </div>
                                 <span className="text-xs font-semibold text-slate-700">
-                                    {googleContactsConnected && globalSettings?.gmailStats?.lastSyncAt 
-                                        ? new Date(globalSettings.gmailStats.lastSyncAt).toLocaleString() 
+                                    {googleContactsConnected && globalSettings?.googleContactsStats?.lastSyncAt
+                                        ? new Date(globalSettings.googleContactsStats.lastSyncAt).toLocaleString()
                                         : "Never"}
                                 </span>
                             </div>

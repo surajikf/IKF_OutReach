@@ -27,7 +27,9 @@ type AdminAction =
   | "MAKE_ADMIN"
   | "REVOKE_ADMIN"
   | "GRANT_INVOICE_ACCESS"
-  | "REVOKE_INVOICE_ACCESS";
+  | "REVOKE_INVOICE_ACCESS"
+  | "CLEAR_INVOICE_REQUEST"
+  | "DELETE_USER";
 
 type AdminUser = {
   id: string;
@@ -36,7 +38,15 @@ type AdminUser = {
   role: UserRole;
   status: UserStatus;
   canAccessInvoiceData: boolean;
+  onboardingSkippedSteps?: string[];
 };
+
+type PendingConfirmation = {
+  userId: string;
+  action: AdminAction;
+  message: string;
+} | null;
+
 
 export default function AdminDashboard() {
   const { data: session, status: authStatus } = useSession();
@@ -49,6 +59,7 @@ export default function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("ALL");
   const [manageUserId, setManageUserId] = useState<string | null>(null);
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation>(null);
 
   useEffect(() => {
     if (authStatus === "unauthenticated") {
@@ -77,14 +88,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const runAction = async (userId: string, action: AdminAction) => {
-    const needsConfirm =
-      action === "BAN" || action === "REVOKE_ADMIN" || action === "REVOKE_INVOICE_ACCESS";
-    if (needsConfirm) {
-      const ok = window.confirm("Please confirm this change.");
-      if (!ok) return;
-    }
-
+  const executeAction = async (userId: string, action: AdminAction) => {
     try {
       setBusyUserId(userId);
       const res = await fetch(apiPath("/admin/users"), {
@@ -98,6 +102,9 @@ export default function AdminDashboard() {
         throw new Error(data?.error?.message || data?.error || "Update failed");
       }
 
+      if (action === "DELETE_USER") {
+        setManageUserId(null);
+      }
       toast.success("User access updated.");
       await fetchUsers();
     } catch (err: any) {
@@ -107,13 +114,31 @@ export default function AdminDashboard() {
     }
   };
 
+
+  const runAction = async (userId: string, action: AdminAction) => {
+    const needsConfirm =
+      action === "BAN" || action === "REVOKE_ADMIN" || action === "REVOKE_INVOICE_ACCESS" || action === "DELETE_USER";
+
+    if (needsConfirm) {
+      const message =
+        action === "DELETE_USER"
+          ? "Delete this user permanently? This cannot be undone."
+          : "Please confirm this change.";
+      setPendingConfirmation({ userId, action, message });
+      return;
+    }
+
+    await executeAction(userId, action);
+  };
+
   const summary = useMemo(() => {
     const pending = users.filter((u) => u.status === "PENDING").length;
     const approved = users.filter((u) => u.status === "APPROVED").length;
     const blocked = users.filter((u) => u.status === "BANNED").length;
     const admins = users.filter((u) => u.role === "ADMIN").length;
     const invoiceEnabled = users.filter((u) => u.canAccessInvoiceData).length;
-    return { pending, approved, blocked, admins, invoiceEnabled, total: users.length };
+    const invoiceRequested = users.filter((u) => !u.canAccessInvoiceData && (u.onboardingSkippedSteps || []).includes("invoice_access_requested")).length;
+    return { pending, approved, blocked, admins, invoiceEnabled, invoiceRequested, total: users.length };
   }, [users]);
 
   const filteredUsers = useMemo(() => {
@@ -138,7 +163,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="w-full space-y-6 pb-16 px-3 sm:px-5 lg:px-8">
+    <div className="w-full space-y-5 pb-12 px-3 sm:px-4 lg:px-6">
       <header className="px-1">
         <div className="flex items-center gap-2 text-red-600 mb-2">
           <ShieldAlert className="w-4 h-4" />
@@ -148,12 +173,13 @@ export default function AdminDashboard() {
         <p className="text-sm text-slate-500 mt-1">Approve users and manage role and invoice access.</p>
       </header>
 
-      <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <SummaryCard label="Pending" value={summary.pending} tone="amber" />
         <SummaryCard label="Approved" value={summary.approved} tone="green" />
         <SummaryCard label="Blocked" value={summary.blocked} tone="red" />
         <SummaryCard label="Admins" value={summary.admins} tone="slate" />
         <SummaryCard label="Invoice On" value={summary.invoiceEnabled} tone="blue" />
+        <SummaryCard label="Invoice Requests" value={summary.invoiceRequested} tone="amber" />
       </section>
 
       <section className="bg-white rounded-2xl border border-slate-200/70 shadow-sm overflow-hidden">
@@ -192,14 +218,14 @@ export default function AdminDashboard() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left min-w-[860px]">
+          <table className="w-full text-left min-w-[720px]">
             <thead className="bg-slate-50/70 border-b border-slate-100">
               <tr>
-                <th className="px-6 py-3.5 text-xs font-medium text-slate-500">User</th>
-                <th className="px-6 py-3.5 text-xs font-medium text-slate-500">Account</th>
-                <th className="px-6 py-3.5 text-xs font-medium text-slate-500">Role</th>
-                <th className="px-6 py-3.5 text-xs font-medium text-slate-500">Invoice</th>
-                <th className="px-6 py-3.5 text-xs font-medium text-slate-500 text-right">Action</th>
+                <th className="px-4 py-3 text-xs font-medium text-slate-500">User</th>
+                <th className="px-4 py-3 text-xs font-medium text-slate-500">Account</th>
+                <th className="px-4 py-3 text-xs font-medium text-slate-500">Role</th>
+                <th className="px-4 py-3 text-xs font-medium text-slate-500">Invoice</th>
+                <th className="px-4 py-3 text-xs font-medium text-slate-500 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -208,7 +234,7 @@ export default function AdminDashboard() {
                 const isBusy = busyUserId === u.id;
                 return (
                   <tr key={u.id} className="hover:bg-slate-50/40">
-                    <td className="px-6 py-4.5">
+                    <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500">
                           <UserIcon className="w-5 h-5" />
@@ -222,16 +248,16 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4.5">
+                    <td className="px-4 py-3">
                       <StatusBadge status={u.status} />
                     </td>
-                    <td className="px-6 py-4.5">
+                    <td className="px-4 py-3">
                       <RoleBadge role={u.role} />
                     </td>
-                    <td className="px-6 py-4.5">
-                      <InvoiceBadge enabled={u.canAccessInvoiceData} />
+                    <td className="px-4 py-3">
+                      <InvoiceBadge enabled={u.canAccessInvoiceData} requested={!u.canAccessInvoiceData && (u.onboardingSkippedSteps || []).includes("invoice_access_requested")} />
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-4 py-3 text-right">
                       {isSelf ? (
                         <span className="text-xs text-slate-400 font-medium">No self-edit</span>
                       ) : (
@@ -272,7 +298,7 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-3 gap-2 text-xs">
                 <StatusBadge status={manageUser.status} />
                 <RoleBadge role={manageUser.role} />
-                <InvoiceBadge enabled={manageUser.canAccessInvoiceData} />
+                <InvoiceBadge enabled={manageUser.canAccessInvoiceData} requested={!manageUser.canAccessInvoiceData && (manageUser.onboardingSkippedSteps || []).includes("invoice_access_requested")} />
               </div>
 
               <div className="rounded-xl border border-slate-200 p-4">
@@ -332,6 +358,14 @@ export default function AdminDashboard() {
                 <div className="rounded-xl border border-slate-200 p-4">
                   <p className="text-sm font-semibold text-slate-800 mb-2">Invoice Access</p>
                   <div className="flex flex-wrap gap-2">
+                    {!manageUser.canAccessInvoiceData && (manageUser.onboardingSkippedSteps || []).includes("invoice_access_requested") && (
+                      <ActionButton
+                        label="Approve Invoice Request"
+                        tone="blue"
+                        disabled={busyUserId === manageUser.id}
+                        onClick={() => runAction(manageUser.id, "GRANT_INVOICE_ACCESS")}
+                      />
+                    )}
                     {manageUser.canAccessInvoiceData ? (
                       manageUser.role === "ADMIN" ? (
                         <span className="text-xs text-slate-500 font-medium">
@@ -347,15 +381,68 @@ export default function AdminDashboard() {
                       )
                     ) : (
                       <ActionButton
-                        label="Enable Invoice Access"
+                        label={(manageUser.onboardingSkippedSteps || []).includes("invoice_access_requested") ? "Enable Anyway" : "Enable Invoice Access"}
                         tone="blue"
                         disabled={busyUserId === manageUser.id}
                         onClick={() => runAction(manageUser.id, "GRANT_INVOICE_ACCESS")}
                       />
                     )}
+                    {!manageUser.canAccessInvoiceData && (manageUser.onboardingSkippedSteps || []).includes("invoice_access_requested") && (
+                      <ActionButton
+                        label="Clear Request"
+                        tone="slate"
+                        disabled={busyUserId === manageUser.id}
+                        onClick={() => runAction(manageUser.id, "CLEAR_INVOICE_REQUEST")}
+                      />
+                    )}
                   </div>
                 </div>
               )}
+
+              <div className="rounded-xl border border-red-200 bg-red-50/50 p-4">
+                <p className="text-sm font-semibold text-red-800 mb-2">Danger Zone</p>
+                <p className="text-xs text-red-700 mb-3">
+                  Permanently removes this user account from the system.
+                </p>
+                <ActionButton
+                  label="Delete Permanently"
+                  tone="red"
+                  disabled={busyUserId === manageUser.id}
+                  onClick={() => runAction(manageUser.id, "DELETE_USER")}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingConfirmation && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/50 p-4 flex items-center justify-center">
+          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-xl">
+            <div className="px-5 py-4 border-b border-slate-100">
+              <h3 className="text-base font-semibold text-slate-900">Confirm Action</h3>
+              <p className="text-sm text-slate-600 mt-1">{pendingConfirmation.message}</p>
+            </div>
+            <div className="px-5 py-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingConfirmation(null)}
+                className="px-3 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const payload = pendingConfirmation;
+                  setPendingConfirmation(null);
+                  if (!payload) return;
+                  await executeAction(payload.userId, payload.action);
+                }}
+                className="px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700"
+              >
+                Confirm
+              </button>
             </div>
           </div>
         </div>
@@ -431,7 +518,14 @@ function RoleBadge({ role }: { role: UserRole }) {
   );
 }
 
-function InvoiceBadge({ enabled }: { enabled: boolean }) {
+function InvoiceBadge({ enabled, requested = false }: { enabled: boolean; requested?: boolean }) {
+  if (!enabled && requested) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md border text-amber-700 bg-amber-50 border-amber-200">
+        Requested
+      </span>
+    );
+  }
   return (
     <span
       className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md border ${
