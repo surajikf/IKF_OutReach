@@ -249,6 +249,33 @@ export async function POST(req: Request) {
             });
         }
 
+        // Backfill isRoleBased for any existing records whose classification is stale.
+        // Runs in background so it doesn't slow down the sync response.
+        after(async () => {
+            try {
+                const allInvoice = await prisma.client.findMany({
+                    where: { source: "INVOICE_SYSTEM" },
+                    select: { id: true, email: true, isRoleBased: true },
+                });
+                const toFix = allInvoice.filter(c => {
+                    if (!c.email) return false;
+                    const expected = isRoleBasedEmail(c.email);
+                    return expected !== c.isRoleBased;
+                });
+                if (toFix.length > 0) {
+                    await Promise.all(toFix.map(c =>
+                        prisma.client.update({
+                            where: { id: c.id },
+                            data: { isRoleBased: isRoleBasedEmail(c.email!) },
+                        }).catch(() => {})
+                    ));
+                    console.log(`[INVOICE_SYNC] Backfilled isRoleBased for ${toFix.length} records.`);
+                }
+            } catch (e) {
+                console.error("[INVOICE_SYNC] isRoleBased backfill failed:", e);
+            }
+        });
+
         return ok({
             count: activeImported,
             message: totalInactive > 0
