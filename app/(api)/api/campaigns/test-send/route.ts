@@ -38,14 +38,6 @@ export async function POST(request: NextRequest) {
             select: { id: true, scopeGranted: true },
         });
 
-        if (preferredGmailAccount && !preferredGmailAccount.scopeGranted) {
-            return error(
-                "BAD_REQUEST",
-                "Connected Gmail account is missing SMTP OAuth scope. Reconnect Gmail and grant consent again.",
-                { status: 400 }
-            );
-        }
-
         const result = await sendStrategicEmail({
             to: email,
             subject: `[TEST] ${subject}`,
@@ -59,10 +51,23 @@ export async function POST(request: NextRequest) {
         });
 
         if (result.success) {
+            // Auto-repair scopeGranted if it was previously incorrect
+            if (preferredGmailAccount && !preferredGmailAccount.scopeGranted) {
+                await prisma.gmailAccount.update({
+                    where: { id: preferredGmailAccount.id },
+                    data: { scopeGranted: true, lastStatus: "HEALTHY" },
+                }).catch(() => {});
+            }
             return ok({ message: "Test email sent successfully." });
         } else {
+            console.error("[TEST-SEND] Failed:", {
+                sessionEmail,
+                preferredAccountId: preferredGmailAccount?.id,
+                error: result.error
+            });
             return error("BAD_REQUEST", result.error || "Failed to send test email.", {
-                status: 400
+                status: 400,
+                details: result.error,
             });
         }
     } catch (err) {

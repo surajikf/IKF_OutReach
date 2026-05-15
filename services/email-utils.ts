@@ -1,68 +1,59 @@
 /**
- * Utility to identify role-based or generic business emails
- * that should be isolated from standard client lists.
+ * Identifies emails that are provably automated/system addresses — i.e., addresses
+ * that CANNOT belong to a real person and will never read a campaign email.
+ *
+ * Deliberately conservative: short abbreviations (amc, hr, admin, sales, it, finance,
+ * info, office, team…) are NOT flagged because they are frequently a real person's
+ * work address at a small business, especially in B2B contexts.
+ *
+ * Only block addresses where it is technically impossible for a human to be the
+ * intended recipient: no-reply, bounce handlers, system daemons, spam traps.
  */
 
-const ROLE_BASED_PREFIXES = [
-    // General / Communication
-    "info", "contact", "support", "help", "enquiry", "inquiries", "hello", "connect",
-    // System / Automated
-    "noreply", "no_reply", "donotreply", "do_not_reply", "no-reply", "do-not-reply", "notification", "notifications", "alerts", "updates", "system", "auto", "automated", "update",
-    // HR / Careers
-    "career", "careers", "jobs", "hr", "recruitment", "hiring", "talent",
-    // Sales / Business
-    "sales", "business", "partnerships", "partner", "marketing", "promotions",
-    // Technical / IT / Server
-    "admin", "administrator", "root", "hostmaster", "webmaster", "postmaster", "server", "tech", "it", "security", "abuse",
-    // Billing / Accounts / Operational
-    "accounts", "billing", "payments", "invoice", "finance", "amc", "office", "team",
-    // Customer Service / Reception
-    "service", "services", "customerservice", "customer-service", "customer_service", "care", "customercare", "feedback", "reception", "frontdesk",
-    // Internal / Testing / Junk
-    "test", "testing", "demo", "dev", "developer", "qa", "staging", "sandbox", "junk", "temp", "temporary", "trash", "disposable"
-];
+// Exact local-part matches that are provably non-human inboxes.
+const SYSTEM_EXACT = new Set([
+    "noreply", "no-reply", "no_reply",
+    "donotreply", "do-not-reply", "do_not_reply",
+    "mailer-daemon", "mailer_daemon",
+    "postmaster",
+    "bounce", "bounces",
+    "abuse",
+    "spam",
+    "unsubscribe",
+    "blackhole", "devnull", "null",
+]);
 
-// Patterns for systemic or auto-generated emails (e.g., user-123@, info.office@)
-const SYSTEMIC_PATTERNS = [
-    /^noreply-/,
-    /^no_reply-/,
-    /^no-reply_/,
-    /^no-reply-/,
-    /^donotreply-/,
-    /^do-not-reply-/,
-    /^notifications-/,
-    /^alert-/,
-    /^update-/,
+// Prefix patterns for auto-generated addresses (e.g. noreply-xyz@, bounce+token@).
+const SYSTEM_PATTERNS = [
+    /^noreply[-+_.]/,
+    /^no-reply[-+_.]/,
+    /^no_reply[-+_.]/,
+    /^donotreply[-+_.]/,
+    /^bounce[-+_.]/,
     /^mailer-daemon/,
-    /^postmaster/,
-    /^bounce/,
-    /^[a-f0-9]{8,}$/, // Hexadecimal hashes usually used for internal tracking
+    /^postmaster[-+_.]/,
+    /^notifications?[-+_.]/,    // notifications-xyz@, notification+id@
+    /^alerts?[-+_.]/,           // alerts-xyz@
+    /^[a-f0-9]{12,}$/,          // Long hex strings — internal tracking addresses
 ];
 
 /**
- * Checks if an email address is role-based (generic).
+ * Returns true only for provably automated / system email addresses.
+ * Ambiguous prefixes (info, admin, sales, hr, amc, finance, office…) are treated
+ * as potentially human and are NOT blocked — they are common real-person inboxes
+ * in small and mid-size businesses.
  */
 export function isRoleBasedEmail(email: string): boolean {
-    if (!email || !email.includes('@')) return false;
+    if (!email || !email.includes("@")) return false;
 
     try {
-        const parts = email.toLowerCase().trim().split('@');
-        const localPart = parts[0];
+        const localPart = email.toLowerCase().trim().split("@")[0];
 
-        // 1. Check exact prefix matches
-        if (ROLE_BASED_PREFIXES.includes(localPart)) return true;
-
-        // 2. Check for dotted/hyphenated variations (e.g., info.support@)
-        // If any part of a multi-segment local part is a role-based prefix, flag it
-        const segments = localPart.split(/[.\-_]/);
-        if (segments.some(seg => ROLE_BASED_PREFIXES.includes(seg))) return true;
-
-        // 3. Check for systemic patterns
-        if (SYSTEMIC_PATTERNS.some(pattern => pattern.test(localPart))) return true;
+        if (SYSTEM_EXACT.has(localPart)) return true;
+        if (SYSTEM_PATTERNS.some((p) => p.test(localPart))) return true;
 
         return false;
-    } catch (e) {
+    } catch {
         return false;
     }
 }
-

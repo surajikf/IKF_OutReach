@@ -1,10 +1,23 @@
 import { PrismaClient } from '@prisma/client';
 
 const prismaClientSingleton = () => {
-    let runtimeUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
-    if (runtimeUrl && !runtimeUrl.includes("connection_limit")) {
-        const separator = runtimeUrl.includes("?") ? "&" : "?";
-        runtimeUrl += `${separator}connection_limit=10&pool_timeout=20`;
+    // Use DATABASE_URL (port 6543, PgBouncer transaction mode) for all runtime queries.
+    // DIRECT_URL (port 5432, session mode) is capped at 15 connections on Supabase free tier
+    // and must only be used by Prisma migrate — never for application queries.
+    // pgbouncer=true disables prepared statements so transaction-mode pooling works correctly.
+    let runtimeUrl = process.env.DATABASE_URL;
+
+    if (runtimeUrl) {
+        // Ensure pgbouncer=true is present to disable prepared statements
+        if (!runtimeUrl.includes("pgbouncer=true")) {
+            const sep = runtimeUrl.includes("?") ? "&" : "?";
+            runtimeUrl += `${sep}pgbouncer=true`;
+        }
+        // Cap Prisma's own internal pool — the real pooling is handled by PgBouncer
+        if (!runtimeUrl.includes("connection_limit")) {
+            const sep = runtimeUrl.includes("?") ? "&" : "?";
+            runtimeUrl += `${sep}connection_limit=3&pool_timeout=15`;
+        }
     }
     const baseClient = runtimeUrl
         ? new PrismaClient({ datasourceUrl: runtimeUrl })
@@ -21,10 +34,11 @@ const prismaClientSingleton = () => {
                         const anyArgs = args as any;
                         anyArgs.where = anyArgs.where || {};
 
-                        // If isRoleBased is NOT explicitly set in the query, default it to false
-                        // This prevents generic emails from leaking into normal business features
+                        // If isRoleBased is NOT explicitly set in the query, exclude only confirmed
+                        // role-based contacts (isRoleBased = true). Contacts where the field is null
+                        // (e.g. Invoice System, Google Contacts) are included — they are not role-based.
                         if (anyArgs.where.isRoleBased === undefined) {
-                            anyArgs.where.isRoleBased = false;
+                            anyArgs.where.isRoleBased = { not: true };
                         }
                     }
 

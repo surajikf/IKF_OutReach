@@ -5,13 +5,14 @@ import { getBackendSession } from "@/services/auth";
 export async function GET(request: Request) {
     try {
         const session = await getBackendSession(request);
-        if (!session?.user?.id) {
+        const userId = session?.user?.id;
+        if (!userId) {
             return error("UNAUTHORIZED", "Sign in required.", { status: 401 });
         }
 
         const [accounts, clientCounts, roleBasedCounts] = await Promise.all([
             prisma.gmailAccount.findMany({
-                where: { userId: session.user.id },
+                where: { userId },
                 select: {
                     id: true,
                     accountName: true,
@@ -25,26 +26,30 @@ export async function GET(request: Request) {
             prisma.client.groupBy({
                 by: ['gmailSourceAccount'],
                 _count: { _all: true },
-                where: { source: 'GMAIL', userId: session.user.id }
+                where: { userId }
             }),
             prisma.client.groupBy({
                 by: ['gmailSourceAccount', 'isRoleBased'],
                 _count: { _all: true },
-                where: { source: 'GMAIL', userId: session.user.id }
+                where: { userId }
             }),
         ]);
 
         const accountList = accounts.map((acc: any) => {
             const emailLower = acc.email?.toLowerCase();
+            
+            // Strictly match by gmailSourceAccount
             const countObj = clientCounts.find(c =>
                 (c.gmailSourceAccount as string)?.toLowerCase() === emailLower
             );
             const total = countObj ? countObj._count._all : 0;
+
             const roleRows = roleBasedCounts.filter(c =>
                 (c.gmailSourceAccount as string)?.toLowerCase() === emailLower
             );
-            const generic = roleRows.find(r => !r.isRoleBased)?._count._all ?? 0;
-            const roleBased = roleRows.find(r => r.isRoleBased)?._count._all ?? 0;
+            const generic = roleRows.filter(r => !r.isRoleBased).reduce((sum, r) => sum + r._count._all, 0);
+            const roleBased = roleRows.filter(r => r.isRoleBased).reduce((sum, r) => sum + r._count._all, 0);
+
             return { ...acc, count: total, generic, roleBased };
         });
 
@@ -81,3 +86,30 @@ export async function DELETE(request: Request) {
     }
 }
 
+// PATCH /api/settings/gmail?id=xxx  → mark account scopeGranted=true after reconnect
+export async function PATCH(request: Request) {
+    try {
+        const session = await getBackendSession(request);
+        if (!session?.user?.id) return error("UNAUTHORIZED", "Sign in required.", { status: 401 });
+
+        const { searchParams } = new URL(request.url);
+        const id = searchParams.get("id");
+        if (!id) return error("VALIDATION_ERROR", "ID required", { status: 400 });
+
+        const account = await prisma.gmailAccount.findFirst({
+            where: { id, userId: session.user.id },
+            select: { id: true },
+        });
+        if (!account) return error("NOT_FOUND", "Account not found", { status: 404 });
+
+        await prisma.gmailAccount.update({
+            where: { id },
+            data: { scopeGranted: true, lastStatus: "HEALTHY" },
+        });
+
+        return ok({ repaired: true });
+    } catch (err) {
+        console.error("Gmail scope repair failed:", err);
+        return error("INTERNAL_ERROR", "Internal Server Error");
+    }
+}

@@ -12,7 +12,7 @@ model Client {
   id                  String            @id @default(cuid())
   clientName          String
   contactPerson       String?
-  email               String            @unique
+  email               String
   industry            String
   relationshipLevel   String
   createdAt           DateTime          @default(now())
@@ -41,6 +41,8 @@ model Client {
   user                User?             @relation(fields: [userId], references: [id])
 
   @@unique([source, externalId])
+  @@unique([userId, email])
+  @@index([email])
   @@index([userId])
 }
 
@@ -60,11 +62,13 @@ model CampaignHistory {
   clientId        String?
   userId          String?
   gmailDraftId    String?
+  jobId           String?
   dateCreated     DateTime @default(now())
   client          Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
   user            User?    @relation(fields: [userId], references: [id])
 
   @@index([userId])
+  @@index([jobId])
 }
 
 enum JobStatus {
@@ -177,6 +181,7 @@ model User {
 
   drafts          EmailDraft[]
   gmailAccounts   GmailAccount[]
+  googleContactsAccounts GoogleContactsAccount[]
   zohoConnection  ZohoConnection?
   clients         Client[]
   campaignHistory CampaignHistory[]
@@ -187,16 +192,35 @@ model GmailAccount {
   userId                String
   accountName           String
   email                 String
-  refreshTokenEncrypted String
-  accessTokenEncrypted  String?
-  expiresAt             DateTime?
-  isDefault             Boolean   @default(false)
-  scopeGranted          Boolean   @default(false)
-  
+  refreshTokenEncrypted         String
+  accessTokenEncrypted          String?
+  expiresAt                     DateTime?
+  isDefault                     Boolean   @default(false)
+  scopeGranted                  Boolean   @default(false)
+
   // Diagnostic Fields
   lastUsed              DateTime?
   lastStatus            String?   @default("IDLE")
-  
+
+  updatedAt             DateTime  @updatedAt
+
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, email])
+  @@index([userId, updatedAt])
+}
+
+model GoogleContactsAccount {
+  id                    String    @id @default(cuid())
+  userId                String
+  accountName           String
+  email                 String
+  refreshTokenEncrypted String
+  accessTokenEncrypted  String?
+  expiresAt             DateTime?
+  lastUsed              DateTime?
+  lastStatus            String?   @default("IDLE")
+  createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)

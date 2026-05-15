@@ -59,62 +59,58 @@ export async function POST(request: Request) {
         // SMTP with Gmail XOAUTH2 requires the full mail scope.
         // `gmail.send` alone is insufficient for SMTP auth.
         const scopeStr = safeScope;
-        const hasSendPermission = scopeStr.includes("gmail.send");
-        const hasSmtpPermission = scopeStr.includes("mail.google.com");
+        // Accept either gmail.send or mail.google.com — both grant send permission.
+        // This matches the check used in the Google OAuth callback.
+        const hasSendPermission = scopeStr.includes("gmail.send") || scopeStr.includes("mail.google.com");
         const hasReadPermission = scopeStr.includes("gmail.readonly");
 
-        console.log(`[IDENTITY_SYNC] Syncing identity: ${email} | Send: ${hasSendPermission} | SMTP: ${hasSmtpPermission} | Read: ${hasReadPermission}`);
+        console.log(`[IDENTITY_SYNC] Syncing identity: ${email} | Send: ${hasSendPermission} | Read: ${hasReadPermission}`);
 
         const existingAccount = await prisma.gmailAccount.findFirst({
             where: {
                 userId: session.user.id as string,
                 email,
             },
-            select: { id: true, refreshTokenEncrypted: true, isDefault: true },
+            select: { id: true, refreshTokenEncrypted: true, isDefault: true, scopeGranted: true },
         });
 
-        // Update or Create the Identity Node
+        // Update or Create the Identity Node.
+        // Never downgrade scopeGranted from true → false: the OAuth callback is the
+        // authoritative source for what scopes were actually granted. IdentitySync
+        // only sees the NextAuth session token which may carry a subset of scopes.
+        const resolvedScopeGranted = existingAccount?.scopeGranted ? true : hasSendPermission;
+
         const upsertData: any = {
             accountName: safeName || email.split("@")[0].replace(/[._]/g, " "),
             userId: session.user.id as string,
             email: email,
-            scopeGranted: hasSmtpPermission,
+            scopeGranted: resolvedScopeGranted,
             updatedAt: new Date(),
         };
 
-        // Only update tokens if provided (NextAuth only provides refreshToken on first login or prompt:consent)
-        if (safeRefreshToken) {
+        // Only update tokens when the incoming token actually has Gmail send permission.
+        // NextAuth session tokens only carry openid/profile scopes and must NOT overwrite
+        // a Gmail-specific refresh token that was obtained via the Gmail connect flow.
+        if (safeRefreshToken && hasSendPermission) {
             upsertData.refreshTokenEncrypted = encrypt(safeRefreshToken);
-        }
-        if (safeAccessToken) {
-            upsertData.accessTokenEncrypted = encrypt(safeAccessToken);
+            console.log(`[IDENTITY_SYNC] Saving send-capable refresh token for ${email}`);
+        } else if (safeRefreshToken && !hasSendPermission) {
+            console.log(`[IDENTITY_SYNC] Skipping token update for ${email} — incoming token lacks send scope (NextAuth-only token)`);
         }
 
-        // For first-time account creation, refresh token is mandatory.
-        // If user logged in without consent or already granted access previously, NextAuth may not have it.
+        // For new accounts a refresh token is mandatory — guard before hitting the DB.
         if (!existingAccount && !safeRefreshToken) {
-            const res = ok({
-                synced: false,
-                actionRequired: "RE_LOGIN_GMAIL_SEND",
-                reason: "MISSING_REFRESH_TOKEN",
-            });
-            Object.entries(corsHeaders).forEach(([key, value]) => {
-                res.headers.set(key, value);
-            });
+            const res = ok({ synced: false, actionRequired: "RE_LOGIN_GMAIL_SEND", reason: "MISSING_REFRESH_TOKEN" });
+            Object.entries(corsHeaders).forEach(([k, v]) => res.headers.set(k, v));
             return res;
         }
 
         const account = await prisma.gmailAccount.upsert({
-            where: {
-                userId_email: {
-                    userId: session.user.id as string,
-                    email,
-                },
-            },
+            where: { userId_email: { userId: session.user.id as string, email } },
             update: upsertData,
             create: {
                 ...upsertData,
-                refreshTokenEncrypted: encrypt(safeRefreshToken as string),
+                refreshTokenEncrypted: encrypt(safeRefreshToken!),
                 isDefault: !existingAccount?.isDefault,
             },
         });
@@ -125,7 +121,7 @@ export async function POST(request: Request) {
             accountId: account.id,
             email: account.email,
             scopeGranted: account.scopeGranted,
-            actionRequired: !hasSmtpPermission ? "RE_LOGIN_GMAIL_SMTP" : null
+            actionRequired: !hasSendPermission ? "RE_LOGIN_GMAIL_SMTP" : null
         });
         
         // Add CORS headers to the response

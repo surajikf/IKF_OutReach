@@ -387,99 +387,89 @@ export default function CampaignListPage() {
                 }}
             />
 
-            <div className="w-full px-3 sm:px-5 lg:px-8 py-5 sm:py-6 space-y-5">
+            <div className="w-full px-3 sm:px-5 lg:px-6 py-5 sm:py-6 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
                     <div>
                         <h1 className="text-xl font-semibold text-slate-900 tracking-tight">Campaign List</h1>
-                        <p className="text-sm text-slate-500 mt-1">Review, edit, draft, or send your generated campaigns.</p>
+                        <p className="text-sm text-slate-500 mt-0.5">Review, edit, draft, or send your generated campaigns.</p>
                     </div>
                     <button
                         onClick={() => router.push(appPath("/campaigns"))}
-                        className="h-10 px-4 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors w-full sm:w-auto"
+                        className="h-9 px-4 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors w-full sm:w-auto"
                     >
                         + Create Campaign
                     </button>
                 </div>
 
-                {/* Search */}
-                <div className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 flex items-center gap-2">
-                    <Search className="w-4 h-4 text-slate-400 shrink-0" />
-                    <input
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Search by client, subject, or content…"
-                        className="w-full text-sm outline-none"
-                    />
-                </div>
-
-                {/* Status filter tabs */}
-                <div className="flex flex-wrap gap-1.5">
-                    {(["ALL", "GENERATED", "DRAFT_SAVED", "SENT", "FAILED", "PROCESSING"] as const).map((s) => (
-                        <button
-                            key={s}
-                            onClick={() => setStatusFilter(s)}
-                            className={`h-8 px-3 rounded-lg border text-xs font-semibold transition-colors ${
-                                statusFilter === s
-                                    ? "bg-slate-900 text-white border-slate-900"
-                                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
-                            }`}
-                        >
-                            {s === "ALL" ? "All" : STATUS_META[s].label}
-                        </button>
-                    ))}
+                {/* Search + filters row */}
+                <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="bg-white border border-slate-200 rounded-xl px-3 py-2 flex items-center gap-2 flex-1">
+                        <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                        <input
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search by client, subject, or content…"
+                            className="w-full text-sm outline-none"
+                        />
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap">
+                        {(["ALL", "GENERATED", "DRAFT_SAVED", "SENT", "FAILED", "PROCESSING"] as const).map((s) => (
+                            <button
+                                key={s}
+                                onClick={() => setStatusFilter(s)}
+                                className={`h-9 px-3 rounded-xl border text-xs font-semibold transition-colors whitespace-nowrap ${
+                                    statusFilter === s
+                                        ? "bg-slate-900 text-white border-slate-900"
+                                        : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                                }`}
+                            >
+                                {s === "ALL" ? "All" : STATUS_META[s].label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {selectedIds.length > 0 && (
-                    <div className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div className="flex items-center gap-3 text-sm flex-wrap">
                             <span className="font-semibold text-slate-900">{selectedIds.length} selected</span>
-                            <button
-                                type="button"
-                                onClick={toggleSelectAllVisible}
-                                className="text-xs font-semibold text-slate-600 hover:text-slate-900"
-                            >
-                                {allSelectableSelected ? "Unselect all shown" : "Select all shown"}
+                            <button type="button" onClick={toggleSelectAllVisible} className="text-xs font-semibold text-slate-600 hover:text-slate-900">
+                                {allSelectableSelected ? "Unselect all" : "Select all shown"}
                             </button>
-                            <button
-                                type="button"
-                                onClick={() => setSelectedIds([])}
-                                className="text-xs font-semibold text-slate-500 hover:text-slate-800"
-                            >
-                                Clear
-                            </button>
+                            <button type="button" onClick={() => setSelectedIds([])} className="text-xs font-semibold text-slate-400 hover:text-slate-700">Clear</button>
                         </div>
                         <button
                             type="button"
                             onClick={() => setConfirm({ type: "bulk-delete", count: selectedIds.length })}
                             disabled={busyMode === "DELETE"}
-                            className="h-10 px-4 rounded-xl bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                            className="h-9 px-4 rounded-xl bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                         >
-                            {busyMode === "DELETE" ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                            {busyMode === "DELETE" ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                             Delete Selected
                         </button>
                     </div>
                 )}
 
-                {/* Desktop table */}
-                <div className="hidden lg:block bg-white border border-slate-200 rounded-xl overflow-hidden">
-                    <div className="grid grid-cols-12 gap-3 px-5 py-3 text-xs font-medium text-slate-400 border-b border-slate-100 bg-slate-50">
-                        <div className="col-span-1 flex items-center">
+                {/* Table — shown from md+ */}
+                <div className="hidden md:block bg-white border border-slate-200 rounded-xl overflow-hidden">
+                    {/* Header */}
+                    <div className="grid px-4 py-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wide border-b border-slate-100 bg-slate-50/80"
+                        style={{ gridTemplateColumns: "32px 1fr 90px 110px 130px 160px" }}>
+                        <div className="flex items-center">
                             <input
                                 type="checkbox"
                                 checked={allSelectableSelected}
-                                ref={(node) => {
-                                    if (node) node.indeterminate = someSelectableSelected;
-                                }}
+                                ref={(node) => { if (node) node.indeterminate = someSelectableSelected; }}
                                 onChange={toggleSelectAllVisible}
-                                aria-label="Select all visible campaigns"
-                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                aria-label="Select all"
+                                className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                             />
                         </div>
-                        <div className="col-span-3">Client / Subject</div>
-                        <div className="col-span-2">Type</div>
-                        <div className="col-span-2">Status</div>
-                        <div className="col-span-2">Updated</div>
-                        <div className="col-span-2 text-right">Actions</div>
+                        <div>Client / Subject</div>
+                        <div>Type</div>
+                        <div>Status</div>
+                        <div>Updated</div>
+                        <div className="text-right">Actions</div>
                     </div>
 
                     {loading ? (
@@ -488,41 +478,48 @@ export default function CampaignListPage() {
                         </div>
                     ) : rows.length === 0 ? (
                         <div className="p-8 text-sm text-slate-500">No campaigns found.</div>
-                    ) : rows.map((r) => (
-                        <div key={r.id} className="grid grid-cols-12 gap-3 px-5 py-3.5 border-b border-slate-100 last:border-0 items-center hover:bg-slate-50/50 transition-colors">
-                            <div className="col-span-1 flex items-center">
+                    ) : rows.map((r) => {
+                        const ts = new Date((r.dispatchUpdatedAt || r.dateCreated) as string);
+                        const dateStr = ts.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                        const timeStr = ts.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+                        return (
+                        <div key={r.id}
+                            className="grid px-4 py-3 border-b border-slate-100 last:border-0 items-center hover:bg-slate-50/60 transition-colors"
+                            style={{ gridTemplateColumns: "32px 1fr 90px 110px 130px 160px" }}>
+                            <div className="flex items-center">
                                 <input
                                     type="checkbox"
                                     checked={selectedIds.includes(r.id)}
                                     onChange={() => toggleSelected(r.id)}
                                     disabled={(r.dispatchStatus || "GENERATED") === "PROCESSING"}
-                                    aria-label={`Select campaign for ${r.client?.clientName || "Unknown Client"}`}
-                                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-40"
+                                    aria-label={`Select ${r.client?.clientName || "campaign"}`}
+                                    className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-40"
                                 />
                             </div>
-                            <div className="col-span-3 min-w-0">
+                            <div className="min-w-0 pr-3">
                                 <div className="text-sm font-semibold text-slate-900 truncate">{r.client?.clientName || "Unknown Client"}</div>
                                 <div className="text-xs text-slate-400 truncate mt-0.5">{r.campaignTopic || "Untitled"}</div>
                             </div>
-                            <div className="col-span-2">
-                                <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                            <div>
+                                <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-100 whitespace-nowrap">
                                     {r.campaignType}
                                 </span>
                             </div>
-                            <div className="col-span-2">
-                                <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border ${STATUS_META[r.dispatchStatus || "GENERATED"].cls}`}>
+                            <div>
+                                <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border whitespace-nowrap ${STATUS_META[r.dispatchStatus || "GENERATED"].cls}`}>
                                     {STATUS_META[r.dispatchStatus || "GENERATED"].label}
                                 </span>
                             </div>
-                            <div className="col-span-2 text-xs text-slate-400 flex items-center gap-1">
-                                <Clock3 className="w-3 h-3 shrink-0" />
-                                {new Date((r.dispatchUpdatedAt || r.dateCreated) as string).toLocaleString()}
+                            <div className="text-xs text-slate-400">
+                                <div>{dateStr}</div>
+                                <div className="text-[10px] text-slate-300">{timeStr}</div>
                             </div>
-                            <div className="col-span-2 flex justify-end items-center gap-1.5">
+                            <div className="flex justify-end items-center gap-1">
                                 {getActions(r)}
                             </div>
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 {/* Mobile cards */}

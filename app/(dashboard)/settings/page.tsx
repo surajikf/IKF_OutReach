@@ -1,6 +1,7 @@
 "use client";
 
 import { toast } from "sonner";
+import { friendlyMsg } from "@/lib/friendly-errors";
 import { useState, useEffect } from "react";
 import {
     Settings as SettingsIcon,
@@ -109,7 +110,7 @@ export default function SettingsPage() {
             toast.success("Gmail account connected.");
             fetchSettings();
         } else if (auth === "error") {
-            toast.error(reason ? `Gmail connect failed: ${reason}` : "Gmail connect failed.");
+            toast.error(friendlyMsg(reason || "gmail", reason ? `Gmail connection failed: ${reason}` : "Gmail connection failed. Please try again."));
         }
 
         params.delete("auth");
@@ -138,7 +139,7 @@ export default function SettingsPage() {
             }
         } catch (err) {
             console.error(err);
-            toast.error("Network instability detected.");
+            toast.error(friendlyMsg(err, "Could not load settings. Please check your connection and refresh the page."));
         } finally {
             setLoading(false);
         }
@@ -157,15 +158,15 @@ export default function SettingsPage() {
             if (result.success) {
                 setFormData(prev => ({ ...prev, ...result.data }));
                 setSaved(true);
-                toast.success("Configuration persisted successfully.");
+                toast.success("Settings saved successfully.");
                 setTimeout(() => setSaved(false), 3000);
                 return result.data;
             } else {
-                toast.error(result.error?.message || "Database failure.");
+                toast.error(friendlyMsg(result.error?.message || "database", "Could not save settings. Please try again."));
             }
         } catch (err) {
             console.error(err);
-            toast.error("Network instability detected.");
+            toast.error(friendlyMsg(err, "Could not save settings. Please check your connection and try again."));
         } finally {
             setSaving(false);
         }
@@ -184,17 +185,17 @@ export default function SettingsPage() {
             const data = await res.json();
             if (data.success) {
                 toast.success("Dispatch Verified", {
-                    description: `A neural connection test email has been sent to ${session?.user?.email}.`,
+                    description: `A test email has been sent to ${session?.user?.email}.`,
                     icon: <Send className="w-4 h-4" />
                 });
             } else {
-                toast.error("Dispatch Failed", {
-                    description: data.error?.message || "Verify your credentials and try again.",
+                toast.error("Test email failed", {
+                    description: friendlyMsg(data.error?.message || "dispatch", "Please verify your Gmail connection in Settings and try again."),
                     icon: <ZapOff className="w-4 h-4" />
                 });
             }
         } catch (err) {
-            toast.error("Network Error", { description: "Failed to communicate with the dispatch node." });
+            toast.error("Connection problem", { description: "Could not reach the server. Please check your internet connection." });
         } finally {
             setNodeTestLoading(null);
             fetchSettings(); // Refresh status
@@ -211,11 +212,11 @@ export default function SettingsPage() {
                 toast.success(`Connected to ${formData.aiProvider}.`);
             } else {
                 setTestStatus({ status: 'error' });
-                toast.error("Neural link failure.");
+                toast.error("AI connection failed. Please check your API key in the settings below.");
             }
         } catch (err) {
             setTestStatus({ status: 'error' });
-            toast.error("Network error.");
+            toast.error(friendlyMsg(err, "Could not test AI connection. Please check your internet connection."));
         } finally {
             setTimeout(() => setTestStatus({ status: 'idle' }), 5000);
         }
@@ -422,6 +423,20 @@ export default function SettingsPage() {
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-2 relative z-10">
+                                                        {!account.scopeGranted && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={async () => {
+                                                                    const res = await fetch(apiPath(`/settings/gmail?id=${account.id}`), { method: "PATCH" });
+                                                                    const json = await res.json();
+                                                                    if (json.success) { toast.success("Permission restored. Test email should work now."); fetchSettings(); }
+                                                                    else { toast.error("Could not fix permission. Please reconnect Gmail."); }
+                                                                }}
+                                                                className="text-[9px] font-semibold text-amber-600 hover:text-white hover:bg-amber-500 px-3 py-1.5 rounded-lg border border-amber-200 hover:border-amber-500 transition-all"
+                                                            >
+                                                                Fix Permission
+                                                            </button>
+                                                        )}
                                                         {!account.isDefault && (
                                                             <button
                                                                 type="button"

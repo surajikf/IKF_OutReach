@@ -61,7 +61,7 @@ export async function runCampaignGenerateInline(jobId: string, payload: any) {
     if (client) clients = [client];
   }
   if (clients.length === 0 && !clientId) {
-    clients = (await getTargetClients(resolvedSources as any, type, serviceFilters, serviceLogic, excludedClientIds || [], false)).slice(0, 50);
+    clients = (await getTargetClients(resolvedSources as any, type, serviceFilters, serviceLogic, excludedClientIds || [], false, jobUserId ?? undefined)).slice(0, 50);
   }
   if (clients.length === 0) return { count: 0, generatedCampaignIds: [] };
 
@@ -170,10 +170,17 @@ OUTPUT: Pure JSON with "subject" and "body" (HTML) fields only.`;
           campaignType: type,
           campaignTopic: topic,
           generatedOutput: JSON.stringify({ subject: resSubject, body: resEmailBody, leadStrength, spamRisk: quality.spamRisk }),
+          jobId,
           ...(jobUserId && { userId: jobUserId }),
         },
       });
-      if (saved?.id) generatedCampaignIds.push(String(saved.id));
+      if (saved?.id) {
+        generatedCampaignIds.push(String(saved.id));
+        if (jobId) {
+          // Use direct literal to bypass pooler's prepared statement limitation
+          await (prisma as any).$executeRawUnsafe(`UPDATE "CampaignHistory" SET "jobId" = '${jobId}' WHERE id = '${saved.id}'`).catch(() => {});
+        }
+      }
 
       await (prisma as any).client.update({ where: { id: client.id }, data: { lastContacted: new Date() } }).catch(() => {});
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
     Send,
     Target,
@@ -37,6 +37,7 @@ import { wrapInEmailTemplate } from "@/lib/shared/email-template";
 import { normalizeEmailBodyHtml } from "@/lib/shared/email-format";
 import { sanitizeEmailHtml } from "@/lib/shared/email-sanitize";
 import { apiPath } from "@/lib/app-path";
+import { friendlyMsg } from "@/lib/friendly-errors";
 import { readCampaignSession, writeCampaignSession } from "@/lib/campaign-session";
 
 const campaignTypes = [
@@ -111,7 +112,7 @@ const audienceSourceOptions: Array<{
         id: "GOOGLE_CONTACTS",
         name: "Google Contacts",
         desc: "Use contacts from your Google directory.",
-        note: "Directory contacts with email addresses.",
+        note: "Directory contacts only, no invoice data.",
     },
 ];
 
@@ -236,6 +237,7 @@ export default function CampaignGenerator() {
     const [coreMessage, setCoreMessage] = useState("");
     const [cta, setCta] = useState("Let's discuss how this aligns with your goals.");
 
+    const prevSourcesRef = useRef<string[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
     const [audienceData, setAudienceData] = useState({ count: 0, industries: [] as string[] });
     const [loadingAudience, setLoadingAudience] = useState(false);
@@ -464,39 +466,41 @@ export default function CampaignGenerator() {
             setCurrentAudienceClientIds([]);
             return;
         }
-        setLoadingAudience(true);
 
-        fetch(apiPath("/campaigns/estimate"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                audienceSources,
-                type: selectedType,
-                serviceFilters: selectedServices,
-                serviceLogic,
-                excludedClientIds
+        const timer = setTimeout(() => {
+            setLoadingAudience(true);
+            fetch(apiPath("/campaigns/estimate"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    audienceSources,
+                    type: selectedType,
+                    serviceFilters: selectedServices,
+                    serviceLogic,
+                    excludedClientIds
+                })
             })
-        })
-            .then(async res => {
-                const contentType = res.headers.get("content-type");
-                if (!res.ok || !contentType?.includes("application/json")) {
-                    setAudienceData({ count: 0, industries: [] });
-                    return null;
-                }
-                return res.json();
-            })
-            .then(data => {
-                if (!data) return;
-                if (data.success) {
-                    setAudienceData({ count: data.data.count, industries: data.data.industries });
-                } else {
-                    setAudienceData({ count: 0, industries: [] });
-                }
-            })
-            .catch(() => {
-                setAudienceData({ count: 0, industries: [] });
-            })
-            .finally(() => setLoadingAudience(false));
+                .then(async res => {
+                    const contentType = res.headers.get("content-type");
+                    if (!res.ok || !contentType?.includes("application/json")) {
+                        // Don't wipe the data on error, just keep the last known good state
+                        return null;
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    if (!data) return;
+                    if (data.success) {
+                        setAudienceData({ count: data.data.count, industries: data.data.industries });
+                    }
+                })
+                .catch(() => {
+                    // Fail silently to avoid UI flickering if pool is temporarily full
+                })
+                .finally(() => setLoadingAudience(false));
+        }, 150);
+
+        return () => clearTimeout(timer);
     }, [audienceSources, selectedType, selectedServices, serviceLogic, excludedClientIds]);
 
     useEffect(() => {
@@ -506,32 +510,33 @@ export default function CampaignGenerator() {
         }
 
         let cancelled = false;
-        fetch(apiPath("/campaigns/target-clients"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                audienceSources,
-                type: selectedType,
-                serviceFilters: selectedServices,
-                serviceLogic,
-                includeExclusions: true,
-            }),
-        })
-            .then((res) => res.json())
-            .then((data) => {
-                if (cancelled) return;
-                if (data?.success && Array.isArray(data.data)) {
-                    setCurrentAudienceClientIds(data.data.map((c: any) => c.id).filter(Boolean));
-                } else {
-                    setCurrentAudienceClientIds([]);
-                }
+        const timer = setTimeout(() => {
+            fetch(apiPath("/campaigns/target-clients"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    audienceSources,
+                    type: selectedType,
+                    serviceFilters: selectedServices,
+                    serviceLogic,
+                    includeExclusions: true,
+                }),
             })
-            .catch(() => {
-                if (!cancelled) setCurrentAudienceClientIds([]);
-            });
+                .then((res) => res.json())
+                .then((data) => {
+                    if (cancelled) return;
+                    if (data?.success && Array.isArray(data.data)) {
+                        setCurrentAudienceClientIds(data.data.map((c: any) => c.id).filter(Boolean));
+                    }
+                })
+                .catch(() => {
+                    // Fail silently
+                });
+        }, 500);
 
         return () => {
             cancelled = true;
+            clearTimeout(timer);
         };
     }, [audienceSources, selectedType, selectedServices, serviceLogic]);
 
@@ -561,12 +566,20 @@ export default function CampaignGenerator() {
             setSelectedServices([]);
             setServiceLogic("OR");
         }
-        setExcludedClientIds([]);
-        setAudienceData({ count: 0, industries: [] });
-        setIsReviewing(false);
-        setSampleData(null);
-        setEditedSubject("");
-        setEditedBody("");
+        // Only reset if sources actually changed (ignore first run after hydration)
+        const currentSourcesKey = [...audienceSources].sort().join(",");
+        const prevSourcesKey = [...prevSourcesRef.current].sort().join(",");
+        
+        if (currentSourcesKey !== prevSourcesKey && prevSourcesRef.current.length > 0) {
+            setExcludedClientIds([]);
+            setAudienceData({ count: 0, industries: [] });
+            setIsReviewing(false);
+            setSampleData(null);
+            setEditedSubject("");
+            setEditedBody("");
+        }
+        
+        prevSourcesRef.current = audienceSources;
     }, [audienceSources, hasInvoiceSelected, primarySource, sessionHydrated]);
 
     const handleGenerateSample = async (clientId?: string) => {
@@ -624,18 +637,18 @@ export default function CampaignGenerator() {
                 setSampleQualityFixes(Array.isArray(output.qualityFixes) ? output.qualityFixes : []);
                 setIsReviewing(true);
             } else {
-                toast.error(data.error?.message || "Failed to generate preview sample.");
+                toast.error(friendlyMsg(data.error?.message || "generation failed", "Email preview failed. Please try again."));
             }
         } catch (err) {
             console.error(err);
-            toast.error("Could not generate sample draft.");
+            toast.error(friendlyMsg(err, "Could not generate sample draft. Please try again."));
         } finally {
             setIsGenerating(false);
             setTerminalStep(0);
         }
     };
 
-    const fetchTargetClients = async () => {
+    const fetchTargetClients = async (autoOpenPicker: boolean = true) => {
         if (audienceSources.length === 0 || !selectedType) {
             toast.error("Select audience source and objective first.");
             return;
@@ -656,13 +669,13 @@ export default function CampaignGenerator() {
             const data = await res.json();
             if (res.ok && data.success) {
                 setTargetClients(data.data);
-                setShowClientPicker(true);
+                if (autoOpenPicker) setShowClientPicker(true);
             } else {
-                toast.error("Failed to fetch target clients.");
+                toast.error(friendlyMsg(data, "Could not load your contacts. Please try again."));
             }
         } catch (err) {
             console.error(err);
-            toast.error("Audience retrieval failed.");
+            toast.error(friendlyMsg(err, "Could not load your contacts. Please check your connection and try again."));
         } finally {
             setLoadingTargetClients(false);
         }
@@ -697,10 +710,10 @@ export default function CampaignGenerator() {
                 );
                 setShowSubjectSuggestions(true);
             } else {
-                toast.error("Subject optimization failed.");
+                toast.error(friendlyMsg(data, "Could not generate subject suggestions. Please try again."));
             }
         } catch (err) {
-            toast.error("Request timed out.");
+            toast.error(friendlyMsg(err, "Subject suggestions timed out. Please try again in a moment."));
         } finally {
             setIsGeneratingSuggestions(false);
         }
@@ -748,11 +761,11 @@ export default function CampaignGenerator() {
                     ? `/campaigns/results?jobId=${encodeURIComponent(jobId)}`
                     : "/campaigns/results";
             } else {
-                toast.error(data?.error?.message || "Failed to save campaign.");
+                toast.error(friendlyMsg(data?.error?.message || "campaign generation", "Failed to save campaign. Please try again."));
                 setIsSavingSingle(false);
             }
-        } catch {
-            toast.error("Request failed.");
+        } catch (err) {
+            toast.error(friendlyMsg(err, "Request failed. Please check your connection and try again."));
             setIsSavingSingle(false);
         }
     };
@@ -828,10 +841,11 @@ export default function CampaignGenerator() {
                     ? `/campaigns/results?jobId=${encodeURIComponent(jobId)}`
                     : "/campaigns/results";
             } else {
-                toast.error(data?.error?.message || "Batch generation failed.");
+                toast.error(friendlyMsg(data?.error?.message || "Batch generation failed", "Email generation failed. Please try again in a moment."));
             }
         } catch (err) {
             console.error(err);
+            toast.error(friendlyMsg(err, "Something went wrong while generating emails. Please try again."));
             setIsGenerating(false);
             setTerminalStep(0);
         }
@@ -860,11 +874,13 @@ export default function CampaignGenerator() {
                 toast.success("Test email sent.");
                 setTestEmail("");
             } else {
-                toast.error(data.error?.message || "Test send failed.");
+                const errMsg = data.error?.message || data.error?.details || "dispatch";
+                console.error("[TEST-SEND] Error detail:", errMsg);
+                toast.error(friendlyMsg(errMsg, "Test email failed to send. Please check your Gmail connection in Settings."));
             }
         } catch (err) {
             console.error(err);
-            toast.error("Network error.");
+            toast.error(friendlyMsg(err, "Could not send test email. Please check your internet connection."));
         } finally {
             setIsSendingTest(false);
         }
@@ -889,10 +905,10 @@ export default function CampaignGenerator() {
                 setHasEditedSinceLoad(true);
                 toast.success("Refinement applied.");
             } else {
-                toast.error(data.error?.message || "Refinement failed.");
+                toast.error(friendlyMsg(data.error?.message || "AI timeout", "Email refinement failed. Please try again in a moment."));
             }
-        } catch {
-            toast.error("Refinement unavailable.");
+        } catch (err) {
+            toast.error(friendlyMsg(err, "AI refinement is unavailable right now. Please try again in a moment."));
         } finally {
             setIsAutoRefining(false);
         }
@@ -927,9 +943,14 @@ export default function CampaignGenerator() {
                         </p>
                     </div>
                     <div className="hidden md:block">
-                        <div className="px-4 py-2 bg-blue-50 border border-blue-100 rounded-lg">
-                            <p className="text-xs font-medium text-blue-500 mb-0.5">Audience Size</p>
-                            <p className="text-lg font-semibold text-blue-900">{audienceData.count} Total Clients</p>
+                        <div className="px-4 py-2 bg-blue-50 border border-blue-100 rounded-lg flex items-center gap-4">
+                            <div>
+                                <p className="text-xs font-medium text-blue-500 mb-0.5">Audience Size</p>
+                                <p className="text-lg font-semibold text-blue-900">{selectedRecipientsCount} Clients</p>
+                            </div>
+                            <button onClick={() => { fetchTargetClients(false); setShowOversightModal(true); }} className="px-3 py-1 bg-blue-600 text-white text-[10px] font-bold rounded-md hover:bg-blue-700 transition-colors shadow-sm">
+                                View/Edit List
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1011,7 +1032,7 @@ export default function CampaignGenerator() {
                                     <p className="text-xs font-semibold text-slate-500 tracking-wide">Current Sample</p>
                                     <p className="text-sm font-bold text-slate-900 truncate">{sampleData.clientName || sampleData.email || "Selected Client"}</p>
                                 </div>
-                                <button onClick={fetchTargetClients} className="ml-auto text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-100 transition-colors">Change</button>
+                                <button onClick={() => fetchTargetClients()} className="ml-auto text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-100 transition-colors">Change</button>
                             </div>
 
                             <ClientPickerModal isOpen={showClientPicker} onClose={() => setShowClientPicker(false)} clients={targetClients} selectedClientId={sampleData.clientId} onSelect={handleGenerateSample} loading={loadingTargetClients} excludedIds={excludedClientIds} />
@@ -1042,11 +1063,18 @@ export default function CampaignGenerator() {
                                     className="w-full bg-slate-900 text-white py-3 px-4 rounded-xl text-sm font-semibold hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg group disabled:opacity-50"
                                 >
                                     {isGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
-                                    {isGenerating ? "Generating…" : "Generate All"}
+                                    {isGenerating ? "Generating…" : selectedRecipientsCount === currentAudienceClientIds.length && excludedClientIds.length === 0 ? "Generate All" : `Generate for ${selectedRecipientsCount} Clients`}
                                     {!isGenerating && <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
                                 </button>
-                                <p className="text-[11px] text-center text-slate-400">
-                                    {selectedRecipientsCount} clients · {Math.ceil(selectedRecipientsCount / batchSize)} batch{Math.ceil(selectedRecipientsCount / batchSize) !== 1 ? "es" : ""}
+                                <p className="text-[11px] text-center text-slate-400 flex items-center justify-center gap-1">
+                                    <span>{selectedRecipientsCount} clients · {Math.ceil(selectedRecipientsCount / batchSize)} batch{Math.ceil(selectedRecipientsCount / batchSize) !== 1 ? "es" : ""}</span>
+                                    <button onClick={() => { fetchTargetClients(false); setShowOversightModal(true); }} className="text-blue-600 font-bold hover:underline ml-1">Change</button>
+                                    {excludedClientIds.length > 0 && (
+                                        <>
+                                            <span className="mx-1 text-slate-300">·</span>
+                                            <button onClick={() => { setExcludedClientIds([]); toast.success("Selection reset: targeting all matching clients."); }} className="text-slate-500 hover:text-slate-700 font-bold hover:underline">Reset</button>
+                                        </>
+                                    )}
                                 </p>
                             </div>
                         </div>
@@ -1104,23 +1132,28 @@ export default function CampaignGenerator() {
                         <div className="px-4 sm:px-5 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                             <h3 className="text-sm font-semibold text-slate-900">0. Select Audience Source</h3>
                         </div>
-                        <div className="p-4 sm:p-5 md:p-6 flex gap-3 items-start">
+                        <div className="px-3 py-2 sm:px-4 flex flex-col divide-y divide-slate-100">
                             {audienceSourceOptions.map((source) => {
                                 const isSelected = audienceSources.includes(source.id);
-                                const noteText = source.id === "GOOGLE_CONTACTS"
-                                    ? googleContactsCount === null
-                                        ? "Contacts with email addresses."
-                                        : `${googleContactsCount.toLocaleString()} contact${googleContactsCount !== 1 ? "s" : ""} with emails synced.`
-                                    : source.note;
                                 return (
-                                    <button key={source.id} type="button" onClick={() => toggleAudienceSource(source.id)} className={cn("flex-1 text-left p-3.5 rounded-lg border transition-all", isSelected ? "bg-blue-50/60 border-blue-500 ring-1 ring-blue-500" : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50")}>
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <SourceIcon id={source.id} className="w-4 h-4 shrink-0" />
-                                            <h4 className="text-xs font-semibold text-slate-900 leading-none flex-1 truncate">{source.name}</h4>
-                                            <CheckCircle2 className={cn("w-4 h-4 shrink-0 transition-opacity", isSelected ? "text-blue-600 opacity-100" : "opacity-0")} />
+                                    <button
+                                        key={source.id}
+                                        type="button"
+                                        onClick={() => toggleAudienceSource(source.id)}
+                                        className={cn(
+                                            "flex items-center gap-3 w-full text-left py-2.5 transition-all",
+                                            isSelected ? "opacity-100" : "opacity-80 hover:opacity-100"
+                                        )}
+                                    >
+                                        <div className={cn(
+                                            "w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all",
+                                            isSelected ? "border-blue-500 bg-blue-500" : "border-slate-300 bg-white"
+                                        )}>
+                                            {isSelected && <div className="w-1 h-1 rounded-full bg-white" />}
                                         </div>
-                                        <p className="text-[10px] text-slate-500 leading-relaxed">{source.desc}</p>
-                                        <p className="text-[10px] font-medium text-blue-500 mt-1.5 leading-snug">{noteText}</p>
+                                        <SourceIcon id={source.id} className="w-3.5 h-3.5 shrink-0" />
+                                        <span className={cn("text-xs font-semibold shrink-0", isSelected ? "text-blue-700" : "text-slate-700")}>{source.name}</span>
+                                        <span className="text-[10px] text-slate-400 truncate">{source.note}</span>
                                     </button>
                                 );
                             })}
@@ -1255,7 +1288,7 @@ export default function CampaignGenerator() {
                                         {audienceSources.length === 0 || !selectedType ? "—" : loadingAudience ? <RefreshCw className="w-5 h-5 animate-spin text-slate-300" /> : audienceData.count}
                                     </span>
                                     {audienceSources.length > 0 && selectedType && !loadingAudience && audienceData.count > 0 && (
-                                        <button onClick={() => { fetchTargetClients(); setShowOversightModal(true); }} className="text-xs font-medium text-blue-600 hover:text-blue-700">
+                                        <button onClick={() => { fetchTargetClients(false); setShowOversightModal(true); }} className="text-xs font-medium text-blue-600 hover:text-blue-700">
                                             View/Edit List
                                         </button>
                                     )}

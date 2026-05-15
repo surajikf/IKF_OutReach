@@ -1,6 +1,7 @@
 "use client";
 /** Refreshed imports to resolve Search icon registration issue **/
 import { useState, useEffect, Suspense, useRef } from "react";
+import { getFriendlyError } from "@/lib/friendly-errors";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
@@ -222,7 +223,7 @@ function CampaignResultsContent() {
                     if (!contentType.includes("application/json")) {
                         if (cancelled) return;
                         setLoading(false);
-                        toast.error("Session expired or invalid response. Please open campaign list and continue.");
+                        toast.error("Session expired — please refresh the page and try again.");
                         return;
                     }
                     const json = await res.json();
@@ -259,7 +260,8 @@ function CampaignResultsContent() {
 
                         if (job.status === "FAILED") {
                             if (cancelled) return;
-                            toast.error(job.error || "Batch generation failed.");
+                            const { title, message, wait } = getFriendlyError(job.error, { title: "Email generation failed", message: "We couldn't create your emails this time. Please try again." });
+                            toast.error(title, { description: wait ? `${message} (Try again in ${wait})` : message, duration: 8000 });
                             setLoading(false);
                             return;
                         }
@@ -272,7 +274,7 @@ function CampaignResultsContent() {
                                 job.payload?.topic,
                                 job.payload?.type
                             );
-                            if (count > 0 || attempts >= 5) {
+                            if (count > 0) {
                                 setLoading(false);
                             } else if (attempts >= 30 && !loadingWarningShownRef.current) {
                                 loadingWarningShownRef.current = true;
@@ -283,20 +285,20 @@ function CampaignResultsContent() {
                         if (!isTerminalJobStatus(job.status) && Date.now() - startedAt > maxWaitMs) {
                             if (cancelled) return;
                             setLoading(false);
-                            toast.warning("Generation is taking longer than expected. You can reopen from Campaign List.");
+                            toast.warning("Still working…", { description: "Email generation is taking a little longer than usual. You can close this page — your emails will be ready in Campaign List when done.", duration: 10000 });
                             return;
                         }
                     } else if (Date.now() - startedAt > maxWaitMs) {
                         if (cancelled) return;
                         setLoading(false);
-                        toast.warning("Could not confirm job status. Please open Campaign List and continue.");
+                        toast.warning("Taking longer than expected", { description: "Please open Campaign List to check if your emails are ready, or try generating again.", duration: 8000 });
                         return;
                     }
                 } catch {
                     if (Date.now() - startedAt > maxWaitMs) {
                         if (cancelled) return;
                         setLoading(false);
-                        toast.error("Network issue while loading generated campaigns.");
+                        toast.error("Connection problem", { description: "We lost connection while loading your emails. Please check your internet and try again.", duration: 8000 });
                         return;
                     }
                 }
@@ -385,8 +387,11 @@ function CampaignResultsContent() {
 
       let query = normalizedIds.length > 0
         ? `?ids=${encodeURIComponent(normalizedIds.join(","))}`
-        : "?limit=200";
-      if (normalizedIds.length === 0) {
+        : jobId 
+          ? `?jobId=${encodeURIComponent(jobId)}` 
+          : "?limit=200";
+
+      if (normalizedIds.length === 0 && !jobId) {
         if (topic) query += `&search=${encodeURIComponent(topic)}`;
         if (type && type !== "All") query += `&type=${encodeURIComponent(type)}`;
       }
@@ -433,13 +438,14 @@ function CampaignResultsContent() {
                     }
                     setLoading(false);
                 } else if (!opts?.silentEmpty) {
-                    toast.error("Campaign payloads are invalid. Please regenerate campaigns.");
+                    toast.error("Emails not ready yet", { description: "Your emails are still being prepared. Please wait a few seconds — they'll appear automatically.", duration: 6000 });
                 }
                 return processed.length;
             }
         } catch (err) {
             console.error(err);
-            toast.error("Could not load generated campaigns. Please try again from Campaign List.");
+            const { title, message } = getFriendlyError(err, { title: "Couldn't load emails", message: "Please try again. If it keeps failing, wait 1–2 minutes and reopen from Campaign List." });
+            toast.error(title, { description: message, duration: 8000 });
         } finally {
             if (!opts?.silentEmpty) {
                 setTimeout(() => setLoading(false), 800);
@@ -523,7 +529,8 @@ function CampaignResultsContent() {
             const jobId = data?.data?.jobId as string | undefined;
 
             if (!res.ok || !data?.success || !jobId) {
-                toast.error(data?.error?.message || "Failed to enqueue dispatch.");
+                const { title, message, wait } = getFriendlyError(data?.error?.message, { title: "Couldn't send emails", message: "Something went wrong while preparing your emails to send. Please try again." });
+                toast.error(title, { description: wait ? `${message} (Try again in ${wait})` : message, duration: 8000 });
                 setIsDispatching(false);
                 setDispatchProgress(0);
                 return;
@@ -567,7 +574,8 @@ function CampaignResultsContent() {
                     }
 
                     if (job.status === "FAILED") {
-                        toast.error(job.error || "Dispatch batch failed.");
+                        const { title, message, wait } = getFriendlyError(job.error, { title: "Sending failed", message: "We couldn't send your emails this time. Please try again in a moment." });
+                        toast.error(title, { description: wait ? `${message} (Try again in ${wait})` : message, duration: 8000 });
                         setIsDispatching(false);
                         setDispatchProgress(0);
                         return;
@@ -968,10 +976,10 @@ function CampaignResultsContent() {
                                         >
                                             {selectedIds.has(c.id) && <Check className="w-3 h-3" />}
                                         </div>
-                                        <div className="flex flex-col gap-2 flex-1 min-w-0">
+                                        <div className="flex flex-col gap-1.5 flex-1 min-w-0">
                                             <div className="flex items-center justify-between gap-3">
                                                 <div className="flex items-center gap-2 min-w-0">
-                                                    <div className={cn("w-1.5 h-1.5 rounded-full", activeIndex === originalIndex ? "bg-blue-600" : "bg-slate-300")} />
+                                                    <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", activeIndex === originalIndex ? "bg-blue-600" : "bg-slate-300")} />
                                                     <h4 className={cn("text-[11px] font-medium truncate transition-colors", activeIndex === originalIndex ? "text-slate-900" : "text-slate-500 group-hover:text-slate-700")}>
                                                         {c.client?.clientName}
                                                     </h4>
@@ -980,6 +988,11 @@ function CampaignResultsContent() {
                                                     {c.campaignType}
                                                 </span>
                                             </div>
+                                            {c.client?.email && (
+                                                <p className="text-[10px] text-slate-400 truncate pl-3.5 font-normal">
+                                                    {c.client.email}
+                                                </p>
+                                            )}
                                             <p className={cn(
                                                 "text-[10px] font-medium leading-relaxed line-clamp-1 transition-colors pl-3.5",
                                                 activeIndex === originalIndex ? "text-slate-600" : "text-slate-400"
@@ -1053,10 +1066,13 @@ function CampaignResultsContent() {
                                                     {selectedIds.has(c.id) && <Check className="w-3.5 h-3.5" />}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center justify-between mb-1">
+                                                    <div className="flex items-center justify-between mb-0.5">
                                                         <h4 className="text-[11px] font-medium text-slate-900 truncate">{c.client?.clientName}</h4>
                                                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{c.campaignType}</span>
                                                     </div>
+                                                    {c.client?.email && (
+                                                        <p className="text-[10px] text-slate-400 truncate mb-0.5">{c.client.email}</p>
+                                                    )}
                                                     <p className="text-xs text-slate-500 line-clamp-1">{c.content?.subject}</p>
                                                 </div>
                                             </div>

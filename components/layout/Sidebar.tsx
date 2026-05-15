@@ -245,8 +245,8 @@ export function Sidebar() {
                                     <div className="ml-4 pl-3 border-l-2 border-slate-200 flex flex-col gap-0.5 py-0.5">
                                         {[
                                             { href: "/settings", icon: SlidersHorizontal, label: "Configuration" },
-                                            { href: "/import", icon: DownloadCloud, label: "Integrations" },
-                                            ...(isAdmin ? [{ href: "/admin", icon: ShieldAlert, label: "Control Panel" }] : []),
+                                            { href: "/import", icon: DownloadCloud, label: "Data Sources" },
+                                            ...(isAdmin ? [{ href: "/admin", icon: ShieldAlert, label: "User Management" }] : []),
                                         ].map(({ href, icon: Icon, label }) => {
                                             const isActive = pathname === href;
                                             return (

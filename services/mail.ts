@@ -264,7 +264,7 @@ async function sendViaSMTP({ to, subject, text, html }: MailOptions, settings: a
 }
 
 /**
- * GMAIL OAUTH DISPATCH
+ * GMAIL API DISPATCH (REST — works with gmail.send scope, no SMTP required)
  */
 async function sendViaGmail(
     { to, subject, text, html }: MailOptions,
@@ -276,59 +276,77 @@ async function sendViaGmail(
         return { success: false, error: auth.error };
     }
 
+    if (!auth.accessToken) {
+        await auth.updateStatus("ERROR: no_access_token");
+        return { success: false, error: "Gmail access token could not be obtained. Please reconnect your Gmail account." };
+    }
+
     try {
-        const diagnosticHtml = (html || "") + `<!-- Provider: GMAIL | Dispatch Node: ${auth.gmailUser} -->`;
-
-        const transporter = nodemailer.createTransport({
-            service: "gmail",
-            auth: {
-                type: "OAuth2",
-                user: auth.gmailUser,
-                clientId: auth.clientId,
-                clientSecret: auth.clientSecret,
-                refreshToken: auth.refreshToken,
-                accessToken: auth.accessToken || undefined,
-            } as any,
-        });
-
         const sanitizedTo = (to || "").split(',')
-            .map(email => email.trim())
-            .filter(email => email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+            .map(e => e.trim())
+            .filter(e => e && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
             .join(', ');
 
         if (!sanitizedTo) {
-            console.error(`[MAIL] No valid recipients found after sanitization. Original: "${to}"`);
             return { success: false, error: "No valid recipient email address found." };
         }
 
-        console.log(`[MAIL] Sending via Gmail to: ${sanitizedTo} (from: ${auth.gmailUser})`);
+        const diagnosticHtml = (html || "") + `<!-- Provider: GMAIL_API | Dispatch Node: ${auth.gmailUser} -->`;
 
-        const info = await transporter.sendMail({
-            from: `"IKF Outreach" <${auth.gmailUser}>`,
-            to: sanitizedTo,
-            subject,
-            text,
-            html: diagnosticHtml,
+        // Build RFC 2822 message
+        const boundary = `boundary_${Date.now()}`;
+        const lines = [
+            `From: "IKF Outreach" <${auth.gmailUser}>`,
+            `To: ${sanitizedTo}`,
+            `Subject: ${subject || ""}`,
+            "MIME-Version: 1.0",
+            `Content-Type: multipart/alternative; boundary="${boundary}"`,
+            "",
+            `--${boundary}`,
+            "Content-Type: text/plain; charset=UTF-8",
+            "",
+            text || subject || "",
+            "",
+            `--${boundary}`,
+            "Content-Type: text/html; charset=UTF-8",
+            "",
+            diagnosticHtml,
+            "",
+            `--${boundary}--`,
+        ];
+        const raw = Buffer.from(lines.join("\r\n"))
+            .toString("base64")
+            .replace(/\+/g, "-")
+            .replace(/\//g, "_")
+            .replace(/=+$/g, "");
+
+        console.log(`[MAIL] Sending via Gmail API to: ${sanitizedTo} (from: ${auth.gmailUser})`);
+
+        const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${auth.accessToken}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ raw }),
         });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            const detail = (data as any)?.error?.message || `Gmail API error ${response.status}`;
+            await auth.updateStatus(`ERROR: ${detail}`);
+            console.error("[MAIL] Gmail API send failed:", detail);
+            return { success: false, error: `Gmail send failed: ${detail}` };
+        }
 
         await auth.updateStatus("HEALTHY");
-        console.log("[MAIL] Gmail communication dispatched successfully:", {
-            messageId: info.messageId,
-            response: info.response,
-            accepted: info.accepted,
-            rejected: info.rejected
-        });
-        return { success: true, messageId: info.messageId };
+        const messageId = (data as any)?.id || "";
+        console.log("[MAIL] Gmail API dispatched successfully:", messageId);
+        return { success: true, messageId };
     } catch (error: any) {
         await auth.updateStatus(`ERROR: ${error.message}`);
-        console.error("[MAIL] Gmail dispatch failed:", error);
-        const message = String(error?.message || "");
-        if (message.includes("535-5.7.8") || message.toLowerCase().includes("badcredentials")) {
-            return {
-                success: false,
-                error: "Gmail SMTP auth rejected (535 BadCredentials). Reconnect Gmail for this signed-in account and grant consent again.",
-            };
-        }
+        console.error("[MAIL] Gmail API dispatch error:", error);
         return { success: false, error: error.message };
     }
 }

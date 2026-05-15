@@ -53,7 +53,9 @@ function buildAudienceWhere(
   includeExclusions = false,
 ) {
   const sources = Array.isArray(audienceSourceInput) ? audienceSourceInput : [audienceSourceInput];
-  const clauses: any[] = [{ isBlocked: false }, { isRoleBased: false }];
+  const clauses: any[] = [
+    { isBlocked: { not: true } },
+  ];
   const relationshipFilter = getRelationshipFilterForType(type);
 
   // Smart default: if the user hasn't selected any service segmentation,
@@ -95,7 +97,12 @@ function buildAudienceWhere(
   });
 
   clauses.push(sourceClauses.length === 1 ? sourceClauses[0] : { OR: sourceClauses });
-  return { AND: clauses };
+
+  // isRoleBased at top level so the Prisma client extension (which auto-injects
+  // isRoleBased on all Client reads) sees it as already set and does not override it.
+  // { not: true } includes null (unset) contacts — Invoice/Zoho/Google Contacts clients
+  // that were never explicitly flagged are treated as valid campaign targets.
+  return { AND: clauses, isRoleBased: { not: true } };
 }
 
 export async function estimateCampaignAudience(
@@ -106,16 +113,16 @@ export async function estimateCampaignAudience(
   excludedIds: string[] = [],
   userId?: string,
 ) {
-  const where: any = buildAudienceWhere(audienceSource, type, serviceFilters, serviceLogic, excludedIds, false);
-  if (userId) where.userId = userId;
+  const where: any = buildAudienceWhere(audienceSource, type, serviceFilters, serviceLogic, [], false);
 
-  // Sequentialize to avoid PgBouncer/Transaction mode concurrency hangs
-  const count = await prisma.client.count({ where });
-  const industriesData = await prisma.client.groupBy({
-    by: ["industry"],
-    where,
-    _count: { _all: true },
-  });
+  if (excludedIds.length > 0) {
+    where.AND.push({ id: { notIn: excludedIds } });
+  }
+
+  const [count, industriesData] = await Promise.all([
+    prisma.client.count({ where }),
+    prisma.client.groupBy({ by: ["industry"], where, _count: { _all: true } }),
+  ]);
 
   return {
     count,
@@ -129,20 +136,27 @@ export interface CampaignHistoryFilter {
   type?: string;
   ids?: string[];
   userId?: string;
+  jobId?: string;
 }
 
 export async function listCampaignHistory(filter: CampaignHistoryFilter = {}) {
-  const { limit = 50, search = "", type = "", ids = [], userId } = filter;
+  const { limit = 50, search = "", type = "", ids = [], userId, jobId } = filter;
+
+  const fetchingSpecific = ids.length > 0 || !!jobId;
 
   const where: any = {
-    client: {
-      isRoleBased: false,
-    },
+    ...(!fetchingSpecific && {
+      client: {
+        isRoleBased: false,
+      },
+    }),
     ...(userId && { userId }),
   };
 
   if (ids.length > 0) {
     where.id = { in: ids };
+  } else if (jobId) {
+    where.jobId = jobId;
   }
 
   if (search) {
@@ -158,7 +172,7 @@ export async function listCampaignHistory(filter: CampaignHistoryFilter = {}) {
     where.campaignType = type;
   }
 
-  const history = await prisma.campaignHistory.findMany({
+  let history = await prisma.campaignHistory.findMany({
     where,
     take: ids.length > 0 ? undefined : limit,
     orderBy: {
@@ -168,6 +182,25 @@ export async function listCampaignHistory(filter: CampaignHistoryFilter = {}) {
       client: true,
     },
   });
+
+  // RAW FALLBACK: If standard query returned nothing but jobId was provided, 
+  // it might be because the PrismaClient is stale and stripped the unknown 'jobId' field.
+  if (history.length === 0 && jobId && !search && (!ids || ids.length === 0)) {
+    try {
+      const rawResults: any[] = await (prisma as any).$queryRawUnsafe(
+        `SELECT id FROM "CampaignHistory" WHERE "jobId" = '${jobId}' ORDER BY "dateCreated" DESC LIMIT ${limit}`
+      );
+      if (rawResults.length > 0) {
+        history = await prisma.campaignHistory.findMany({
+          where: { id: { in: rawResults.map(r => r.id) } },
+          include: { client: true },
+          orderBy: { dateCreated: "desc" }
+        });
+      }
+    } catch (e) {
+      console.warn("[listCampaignHistory] Raw fallback failed:", e);
+    }
+  }
 
   if (ids.length === 0) {
     return history;
@@ -190,8 +223,23 @@ export async function getTargetClients(
   includeExclusions: boolean = false,
   userId?: string,
 ) {
-  const where: any = buildAudienceWhere(audienceSource, type, serviceFilters, serviceLogic, excludedIds, includeExclusions);
-  if (userId) where.userId = userId;
+  const where: any = buildAudienceWhere(audienceSource, type, serviceFilters, serviceLogic, [], includeExclusions);
+
+  if (excludedIds.length > 0 && !includeExclusions) {
+    const excludedEmails = await prisma.client.findMany({
+      where: { id: { in: excludedIds } },
+      select: { email: true }
+    }).then(l => l.map(c => c.email).filter((e): e is string => !!e));
+
+    where.AND.push({
+      NOT: {
+        OR: [
+          { id: { in: excludedIds } },
+          { email: { in: excludedEmails } }
+        ]
+      }
+    });
+  }
 
   const clients = await prisma.client.findMany({
     where,
