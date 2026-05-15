@@ -65,15 +65,15 @@ function normalizeSyncOptions(options?: GmailSyncOptions) {
   // Compute after: date and max results based on chosen duration.
   // maxResults is capped at 500 per Gmail API page; we paginate for larger ranges.
   // maxResults caps how many message IDs we fetch before stopping pagination.
-  // Unique contacts plateau well before the message count — no need to fetch thousands.
+  // Unique contacts plateau well before the message count â€” no need to fetch thousands.
   // Gmail API metadata calls are the bottleneck; lower counts = faster syncs.
   const durationConfig: Record<GmailSyncDuration, { days: number | null; maxResults: number }> = {
-    "7d":  { days: 7,    maxResults: 100 },
-    "30d": { days: 30,   maxResults: 200 },
-    "90d": { days: 90,   maxResults: 300 },
-    "6m":  { days: 180,  maxResults: 400 },
-    "1y":  { days: 365,  maxResults: 500 },
-    "all": { days: null, maxResults: 500 },
+    "7d":  { days: 7,    maxResults: 200 },
+    "30d": { days: 30,   maxResults: 500 },
+    "90d": { days: 90,   maxResults: 1000 },
+    "6m":  { days: 180,  maxResults: 2000 },
+    "1y":  { days: 365,  maxResults: 3000 },
+    "all": { days: null, maxResults: 5000 },
   };
   const { days, maxResults } = durationConfig[syncDuration];
   let afterDate: string | null = null;
@@ -166,6 +166,44 @@ async function mapLimit<T, R>(
 
     runNext();
   });
+}
+
+const GMAIL_DETAIL_BATCH_SIZE = 250;
+const GMAIL_DETAIL_CONCURRENCY = 8;
+const GMAIL_DETAIL_RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchGmailMessageDetail(accessToken: string, messageId: string, metadataParams: string) {
+  const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=metadata&${metadataParams}`;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const detailRes = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (detailRes.ok) {
+        return await detailRes.json();
+      }
+
+      if (!GMAIL_DETAIL_RETRY_STATUSES.has(detailRes.status)) {
+        console.warn(`[GMAIL_SYNC] Metadata fetch skipped for message ${messageId}: ${detailRes.status}`);
+        return null;
+      }
+
+      const retryAfterSeconds = Number(detailRes.headers.get("retry-after"));
+      const waitMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? retryAfterSeconds * 1000
+        : 750 * (attempt + 1);
+      await sleep(waitMs);
+    } catch (err: any) {
+      if (attempt === 2) {
+        console.warn(`[GMAIL_SYNC] Metadata fetch failed for message ${messageId}:`, err?.message || err);
+        return null;
+      }
+      await sleep(750 * (attempt + 1));
+    }
+  }
+  return null;
 }
 
 export async function runGmailSync(accountId: string, options?: GmailSyncOptions, cleanupMode: GmailCleanupMode = "none") {
@@ -272,7 +310,7 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
   // Use OR logic so emails from any selected folder are included
   const folderQuery = allFolderClauses.length > 1
     ? `{${allFolderClauses.join(" ")}}`
-    : allFolderClauses[0] || "in:inbox";
+    : allFolderClauses[0] || ""; // For 'all time' with no specific folders, search everywhere
   const afterClause = syncOptions.afterDate ? `after:${syncOptions.afterDate}` : "";
   const gmailQuery = [afterClause, folderQuery, "-in:spam -in:trash"].filter(Boolean).join(" ");
   const pageMaxResults = Math.min(syncOptions.maxResults, 500); // Gmail API hard cap per page
@@ -281,7 +319,7 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
   const messages: any[] = [];
   let pageToken: string | undefined;
   let pagesFetched = 0;
-  const MAX_PAGES = 20; // hard safety cap — prevents infinite loop on malformed API responses
+  const MAX_PAGES = 50; // allow fetching up to 25,000 messages (50 * 500)
   do {
     const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages");
     url.searchParams.set("maxResults", String(pageMaxResults));
@@ -333,53 +371,65 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
   const metadataParams = metadataHeaderNames
     .map((h) => `metadataHeaders=${encodeURIComponent(h.charAt(0).toUpperCase() + h.slice(1))}`)
     .join("&");
-  const detailItems = await mapLimit(messages, 20, async (msg: any) => {
-    const detailRes = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&${metadataParams}`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
-    if (!detailRes.ok) return null;
-    return await detailRes.json();
-  });
+  let failedMessages = 0;
+  let processedMessages = 0;
 
-  for (const detail of detailItems) {
-    const headers = (detail as any)?.payload?.headers || [];
-    const snippet = String((detail as any)?.snippet || "").toLowerCase();
-    const subjectHeader = headers.find((h: any) => String(h?.name || "").toLowerCase() === "subject");
-    const subject = String(subjectHeader?.value || "").toLowerCase();
-    headers.forEach((h: any) => {
-      const headerName = String(h?.name || "").toLowerCase();
-      if (!headerList.includes(headerName)) return;
-      const results = parseEmailHeader(h.value);
-      results.forEach((res: any) => {
-        const emailLower = String(res.email || "").toLowerCase();
-        const domain = emailLower.split("@")[1] || "";
-        const isExcludedByDomain = syncOptions.excludedDomains.has(domain);
-        const payload = `${emailLower} ${String(res.name || "").toLowerCase()} ${subject} ${snippet}`;
-        const isExcludedByKeyword = syncOptions.excludedKeywords.some((keyword) => payload.includes(keyword));
-        const automatedCategory = classifyAutomatedEmail(emailLower, String(res.name || ""));
-        const isAutomatedBlocked = !syncOptions.includeAutomatedEmails && !!automatedCategory;
-        const isRoleBasedBlocked = !syncOptions.includeAutomatedEmails && isRoleBasedEmail(emailLower);
-        if (
-          emailLower &&
-          emailLower !== String(account.email || "").toLowerCase() &&
-          !emailLower.includes("@noreply") &&
-          !emailLower.includes("google.com") &&
-          !isExcludedByDomain &&
-          !isExcludedByKeyword &&
-          !isAutomatedBlocked &&
-          !isRoleBasedBlocked
-        ) {
-          contacts.set(emailLower, { email: emailLower, name: res.name });
-        } else if ((isAutomatedBlocked && automatedCategory) || isRoleBasedBlocked) {
-          const category = automatedCategory || "role_based";
-          skippedAutomated[category] = (skippedAutomated[category] || 0) + 1;
-          if (skippedAutomatedSamples.length < 30) {
-            skippedAutomatedSamples.push({ email: emailLower, category });
+  console.log(`[GMAIL_SYNC] Fetching metadata for ${messages.length} messages in batches of ${GMAIL_DETAIL_BATCH_SIZE}...`);
+
+  for (let offset = 0; offset < messages.length; offset += GMAIL_DETAIL_BATCH_SIZE) {
+    const batch = messages.slice(offset, offset + GMAIL_DETAIL_BATCH_SIZE);
+    const detailItems = await mapLimit(batch, GMAIL_DETAIL_CONCURRENCY, async (msg: any) => (
+      fetchGmailMessageDetail(accessToken, msg.id, metadataParams)
+    ));
+
+    for (const detail of detailItems) {
+      if (!detail) {
+        failedMessages++;
+        continue;
+      }
+      processedMessages++;
+      const headers = (detail as any)?.payload?.headers || [];
+      const snippet = String((detail as any)?.snippet || "").toLowerCase();
+      const subjectHeader = headers.find((h: any) => String(h?.name || "").toLowerCase() === "subject");
+      const subject = String(subjectHeader?.value || "").toLowerCase();
+      headers.forEach((h: any) => {
+        const headerName = String(h?.name || "").toLowerCase();
+        if (!headerList.includes(headerName)) return;
+        const results = parseEmailHeader(h.value);
+        results.forEach((res: any) => {
+          const emailLower = String(res.email || "").toLowerCase();
+          const domain = emailLower.split("@")[1] || "";
+          const isExcludedByDomain = syncOptions.excludedDomains.has(domain);
+          const payload = `${emailLower} ${String(res.name || "").toLowerCase()} ${subject} ${snippet}`;
+          const isExcludedByKeyword = syncOptions.excludedKeywords.some((keyword) => payload.includes(keyword));
+          const automatedCategory = classifyAutomatedEmail(emailLower, String(res.name || ""));
+          const isAutomatedBlocked = !syncOptions.includeAutomatedEmails && !!automatedCategory;
+          const isRoleBasedBlocked = !syncOptions.includeAutomatedEmails && isRoleBasedEmail(emailLower);
+          if (
+            emailLower &&
+            emailLower !== String(account.email || "").toLowerCase() &&
+            !emailLower.includes("@noreply") &&
+            !emailLower.includes("google.com") &&
+            !isExcludedByDomain &&
+            !isExcludedByKeyword &&
+            !isAutomatedBlocked &&
+            !isRoleBasedBlocked
+          ) {
+            contacts.set(emailLower, { email: emailLower, name: res.name });
+          } else if ((isAutomatedBlocked && automatedCategory) || isRoleBasedBlocked) {
+            const category = automatedCategory || "role_based";
+            skippedAutomated[category] = (skippedAutomated[category] || 0) + 1;
+            if (skippedAutomatedSamples.length < 30) {
+              skippedAutomatedSamples.push({ email: emailLower, category });
+            }
           }
-        }
+        });
       });
-    });
+    }
+  }
+
+  if (failedMessages > 0) {
+    console.warn(`[GMAIL_SYNC] Skipped ${failedMessages} messages because Gmail metadata was not returned after retries.`);
   }
 
   if (syncOptions.persistBlockList) {
@@ -400,7 +450,7 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
 
   if (cleanupMode === "safe_cleanup") {
     // Block contacts whose import channel was removed from the sync scope.
-    // Only block contacts that came exclusively from the removed folder(s) — contacts
+    // Only block contacts that came exclusively from the removed folder(s) â€” contacts
     // that also appear in a still-active folder are left untouched.
     const allChannels = ["gmail_inbox", "gmail_sent"] as const;
     const activeChannels: string[] = [];
@@ -444,7 +494,13 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
   console.log(`[GMAIL_SYNC] Processing ${contacts.size} extracted contacts...`);
   const emailList = Array.from(contacts.keys());
   const existing = await prisma.client.findMany({
-    where: { email: { in: emailList } },
+    where: {
+      email: { in: emailList },
+      OR: [
+        { userId: account.userId },
+        { source: "INVOICE_SYSTEM" },
+      ],
+    },
     select: { email: true, source: true },
   });
   const existingMap = new Map(existing.map((c) => [String(c.email).toLowerCase(), c.source]));
@@ -461,21 +517,20 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
     const resolvedName = resolveGmailContactName(email, info.name, roleBased);
     const resolvedClientName = resolvedName || "Anonymous Contact";
     const resolvedContactPerson = resolvedName || null;
+    let prev: { id: string; metadata: any } | null = null;
+    let metadata: any = { importChannels };
 
     try {
-      // Only read metadata from this user's own record — never cross-contaminate with other users.
-      const prev = await prisma.client.findFirst({
+      // Only read metadata from this user's own record; never cross-contaminate with other users.
+      prev = await prisma.client.findFirst({
         where: { email, userId: account.userId, source: "GMAIL" },
-        select: { metadata: true },
+        select: { id: true, metadata: true },
       });
       const prevMeta = prev?.metadata && typeof prev.metadata === "object" ? (prev.metadata as any) : {};
       const prevChannels = Array.isArray(prevMeta.importChannels) ? prevMeta.importChannels : [];
-      // Only carry forward Gmail-related channels — never bleed "google_contacts" into Gmail sync.
-      const gmailChannels = ["gmail_inbox", "gmail_sent", "gmail_label"];
-      const filteredPrevChannels = prevChannels.filter((ch: string) => gmailChannels.includes(ch));
-      const metadata = {
+      metadata = {
         ...prevMeta,
-        importChannels: Array.from(new Set([...filteredPrevChannels, ...importChannels])),
+        importChannels: Array.from(new Set([...prevChannels, ...importChannels])),
       };
       await prisma.client.upsert({
         where: {
@@ -505,8 +560,23 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
           metadata: { importChannels },
         },
       });
-    } catch (err) {
-      console.error(`[GMAIL_SYNC] Upsert failed for ${email}:`, err);
+    } catch (err: any) {
+      if (err?.code === "P2002" && prev?.id) {
+        await prisma.client.update({
+          where: { id: prev.id },
+          data: {
+            clientName: resolvedClientName,
+            contactPerson: resolvedContactPerson,
+            gmailSourceAccount: account.email,
+            isRoleBased: roleBased,
+            metadata,
+          },
+        }).catch((updateErr: any) => {
+          console.error(`[GMAIL_SYNC] Failed to update existing Gmail contact for ${email}:`, updateErr?.message || updateErr);
+        });
+      } else {
+        console.error(`[GMAIL_SYNC] Upsert failed for ${email}:`, err);
+      }
     }
 
     return { isConflict, isRoleBased: roleBased };
@@ -517,11 +587,14 @@ export async function runGmailSync(accountId: string, options?: GmailSyncOptions
   const roleBasedCount = upsertResults.filter((r) => r.isRoleBased).length;
   const skippedAutomatedTotal = Object.values(skippedAutomated).reduce((acc, curr) => acc + curr, 0);
 
-  console.log(`[GMAIL_SYNC] Sync complete. Imported: ${importedCount} (${importedCount - roleBasedCount} generic, ${roleBasedCount} role-based), Conflicts: ${conflictCount}, SkippedAutomated: ${skippedAutomatedTotal}`);
+  console.log(`[GMAIL_SYNC] Sync complete. Messages: ${processedMessages}/${messages.length}, Imported: ${importedCount} (${importedCount - roleBasedCount} generic, ${roleBasedCount} role-based), Conflicts: ${conflictCount}, SkippedAutomated: ${skippedAutomatedTotal}`);
   return {
     count: importedCount,
     roleBasedCount,
     conflicts: conflictCount,
+    fetchedMessages: messages.length,
+    processedMessages,
+    failedMessages,
     skippedAutomatedTotal,
     skippedAutomatedByCategory: skippedAutomated,
     skippedAutomatedSamples,

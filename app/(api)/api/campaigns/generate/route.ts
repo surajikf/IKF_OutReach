@@ -92,16 +92,6 @@ export async function POST(request: Request) {
             const subject = replaceVariables(payload.styleGuide.subject, client);
             const generatedOutput = JSON.stringify({ subject, body, leadStrength: 75, spamRisk: 5 });
 
-            const campaign = await (prisma as any).campaignHistory.create({
-                data: {
-                    clientId: client.id,
-                    campaignType: payload.type,
-                    campaignTopic: payload.topic,
-                    generatedOutput,
-                    userId: sessionUser?.id ?? null,
-                },
-            });
-
             // Create a pre-SUCCEEDED job shell so the results page polling works
             const job = await (prisma as any).job.create({
                 data: {
@@ -109,8 +99,27 @@ export async function POST(request: Request) {
                     status: "SUCCEEDED",
                     progress: 100,
                     payload: { singleClientId: payload.singleClientId, _userId: sessionUser?.id ?? null },
-                    result: { count: 1, singleCampaignId: campaign.id },
+                    result: { count: 1 }, // Placeholder
                 },
+            });
+
+            const campaign = await (prisma as any).campaignHistory.create({
+                data: {
+                    clientId: client.id,
+                    campaignType: payload.type,
+                    campaignTopic: payload.topic,
+                    generatedOutput,
+                    jobId: job.id,
+                    userId: sessionUser?.id ?? null,
+                },
+            });
+            // Use direct literal to bypass pooler's prepared statement limitation
+            await (prisma as any).$executeRawUnsafe(`UPDATE "CampaignHistory" SET "jobId" = '${job.id}' WHERE id = '${campaign.id}'`).catch(() => {});
+
+            // Update job result with the real campaign ID
+            await (prisma as any).job.update({
+                where: { id: job.id },
+                data: { result: { count: 1, singleCampaignId: campaign.id } }
             });
 
             return ok({ jobId: job.id }, { status: 202 });
@@ -170,8 +179,14 @@ export async function POST(request: Request) {
         
         if (sampleOnly && clientId) {
             // Specific client requested for sample
+            // Map GOOGLE_CONTACTS to GMAIL for database query
+            const prismaSources = (resolvedSources || []).map(s => s === "GOOGLE_CONTACTS" ? "GMAIL" : s);
             const client = await prisma.client.findFirst({
-                where: { id: clientId, source: { in: resolvedSources as any }, ...(scopedUserId && { userId: scopedUserId }) },
+                where: { 
+                    id: clientId, 
+                    source: { in: prismaSources as any }, 
+                    ...(scopedUserId && { userId: scopedUserId }) 
+                },
                 select: {
                     id: true,
                     clientName: true,

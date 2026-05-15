@@ -20,7 +20,15 @@ export async function POST(request: Request) {
     if (!parsed.success) return error("VALIDATION_ERROR", "Account ID required", { status: 400, details: parsed.error.flatten() });
     const { accountId } = parsed.data;
 
-    const account = await prisma.gmailAccount.findFirst({ where: { id: accountId, userId: session.user.id } });
+    const accountRows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT "id"
+       FROM "GoogleContactsAccount"
+       WHERE "id" = $1 AND "userId" = $2
+       LIMIT 1`,
+      accountId,
+      session.user.id
+    );
+    const account = accountRows[0] || null;
     if (!account) return error("NOT_FOUND", "Account not found for current user", { status: 404 });
 
     const result = await runGoogleContactsSync(accountId);

@@ -52,7 +52,7 @@ async function main() {
             where: { serviceName: { in: client.serviceNames } }
         });
 
-        const existing = await prisma.client.findUnique({
+        const existing = await prisma.client.findFirst({
             where: { email: client.email }
         });
 

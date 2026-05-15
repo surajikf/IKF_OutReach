@@ -312,8 +312,15 @@ export async function GET(request: Request) {
         let duplicateInfoByEmail = new Map<string, { count: number; sources: Set<string> }>();
 
         if (emails.length > 0) {
+            const duplicateScope =
+                userId && canUseInvoice
+                    ? { OR: [{ userId }, { source: "INVOICE_SYSTEM" as const }] }
+                    : userId
+                        ? { userId }
+                        : {};
             const allWithEmails = await prisma.client.findMany({
                 where: {
+                    ...duplicateScope,
                     email: { in: emails },
                 },
                 select: {

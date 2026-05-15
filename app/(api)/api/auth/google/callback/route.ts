@@ -183,6 +183,7 @@ export async function GET(request: Request) {
         if (syncProfile) {
             redirectUrl.searchParams.set("gmail_email", email);
             redirectUrl.searchParams.set("gmail_sync_profile", encodeURIComponent(JSON.stringify(syncProfile)));
+            redirectUrl.searchParams.set("gmail_sync_now", "true");
         }
         return NextResponse.redirect(redirectUrl.toString());
 

@@ -35,10 +35,12 @@ export async function GET(request: Request) {
         response_type: "code",
         scope: [
           "https://www.googleapis.com/auth/userinfo.email",
+          "https://www.googleapis.com/auth/userinfo.profile",
           "https://www.googleapis.com/auth/contacts.readonly",
+          "https://www.googleapis.com/auth/contacts.other.readonly",
         ].join(" "),
         access_type: "offline",
-        prompt: "consent",
+        prompt: "select_account consent",
         state: JSON.stringify(statePayload),
       }).toString();
 

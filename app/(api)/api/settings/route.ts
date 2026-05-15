@@ -93,12 +93,14 @@ export async function GET(request: Request) {
         let googleContactsCount = 0;
         let googleContactsLastSyncAt: Date | null = null;
         try {
-            const contactsAccount = await prisma.gmailAccount.findFirst({
-                where: { ...userScope, lastStatus: "CONTACTS_HEALTHY" },
-                orderBy: { lastUsed: "desc" },
-                select: { lastUsed: true },
-            });
-            googleContactsLastSyncAt = contactsAccount?.lastUsed ?? null;
+            const contactsAccounts = await prisma.$queryRawUnsafe<Array<{ lastUsed: Date | null }>>(
+                `SELECT "lastUsed"
+                 FROM "GoogleContactsAccount"
+                 WHERE "userId" = $1
+                 ORDER BY "lastUsed" DESC NULLS LAST
+                 LIMIT 1`,
+                session.user.id
+            );
 
             const gmailRoleRaw = await prisma.client.groupBy({
                 by: ['isRoleBased'],
@@ -112,7 +114,8 @@ export async function GET(request: Request) {
                 else gmailGenericCount += r._count._all;
             });
 
-            [gmailAccounts, invoiceCount, lastInvoice, gmailCount, lastGmail, googleContactsCount] = await Promise.all([
+            let lastGoogleContactsClient: { updatedAt: Date } | null = null;
+            [gmailAccounts, invoiceCount, lastInvoice, gmailCount, lastGmail, googleContactsCount, lastGoogleContactsClient] = await Promise.all([
                 prisma.gmailAccount.findMany({
                     where: userScope,
                     orderBy: { updatedAt: "desc" },
@@ -146,7 +149,17 @@ export async function GET(request: Request) {
                         metadata: { path: ["importChannels"], array_contains: "google_contacts" },
                     },
                 }),
+                prisma.client.findFirst({
+                    where: {
+                        ...userScope,
+                        source: "GMAIL",
+                        metadata: { path: ["importChannels"], array_contains: "google_contacts" },
+                    },
+                    orderBy: { updatedAt: "desc" },
+                    select: { updatedAt: true },
+                }),
             ]);
+            googleContactsLastSyncAt = contactsAccounts[0]?.lastUsed ?? lastGoogleContactsClient?.updatedAt ?? null;
         } catch (integrationErr) {
             console.warn("Settings GET: integration stats query failed, using empty defaults.", integrationErr);
             gmailAccounts = [];
@@ -260,4 +273,3 @@ export async function POST(request: Request) {
         return error("INTERNAL_ERROR", "Persistence failed. Ensure database schema is synchronized.");
     }
 }
-

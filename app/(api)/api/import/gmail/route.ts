@@ -19,8 +19,9 @@ const gmailImportSchema = z.object({
     }).optional(),
 });
 
-// Allow up to 120s for large mailbox syncs (all time / 1 year).
-export const maxDuration = 120;
+// Large Gmail windows fetch metadata one message at a time.
+export const dynamic = "force-dynamic";
+export const maxDuration = 900;
 
 import { getBackendSession, isApprovedUser } from "@/services/auth";
 

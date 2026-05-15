@@ -77,9 +77,13 @@ export async function GET(request: Request) {
                 client_id: clientId,
                 redirect_uri: redirectUri,
                 response_type: "code",
-                scope: Array.from(scopes).join(" "),
+                scope: [
+                    ...Array.from(scopes),
+                    "https://www.googleapis.com/auth/userinfo.profile"
+                ].join(" "),
                 access_type: "offline",
-                prompt: "consent",
+                prompt: "select_account consent",
+                include_granted_scopes: "true",
                 state: JSON.stringify(statePayload),
             }).toString();
 

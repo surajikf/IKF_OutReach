@@ -15,8 +15,9 @@ export async function GET(request: Request) {
             .split(",")
             .map((id) => id.trim())
             .filter(Boolean);
+        const jobId = searchParams.get("jobId") || "";
 
-        const history = await listCampaignHistory({ limit, search, type, ids, userId: isAdmin ? undefined : user?.id });
+        const history = await listCampaignHistory({ limit, search, type, ids, userId: isAdmin ? undefined : user?.id, jobId });
 
         return ok(history);
     } catch (err: any) {

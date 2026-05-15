@@ -471,12 +471,15 @@ async function runCampaignGenerate(job: JobRow) {
           campaignType: campaignData.campaignType,
           campaignTopic: campaignData.campaignTopic,
           generatedOutput: campaignData.generatedOutput,
+          jobId: job.id,
           ...(jobUserId && { userId: jobUserId }),
         },
       });
 
       if (savedCampaign?.id) {
         generatedCampaignIds.push(String(savedCampaign.id));
+        // Use direct literal to bypass pooler's prepared statement limitation
+        await (prisma as any).$executeRawUnsafe(`UPDATE "CampaignHistory" SET "jobId" = '${job.id}' WHERE id = '${savedCampaign.id}'`).catch(() => {});
       }
 
       // Update client lastContacted

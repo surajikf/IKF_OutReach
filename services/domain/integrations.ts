@@ -144,7 +144,7 @@ export async function syncZohoDeals(userId: string): Promise<ZohoSyncResult> {
       const externalId = String(deal.id);
 
       const existing = await prisma.client.findFirst({
-        where: { email: email.toLowerCase() },
+        where: { email: email.toLowerCase(), userId },
       });
 
       // Dynamic Field Mapping
